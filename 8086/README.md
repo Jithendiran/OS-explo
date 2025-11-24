@@ -1,6 +1,8 @@
 # 8086
 
-The 8086 microprocessor's architecture is built around segmentation, a collection of 16-bit registers for various purposes, and a 16-bit Flag register to reflect the CPU's status and control operations. It has $1\text{ MB RAM}$, 20 bit address bus 
+The 8086 microprocessor's architecture is built around segmentation, a collection of 16-bit registers for various purposes, and a 16-bit Flag register to reflect the CPU's status and control operations. It has $1\text{ MB RAM}$, 20 bit address bus
+
+[Refer How 8086 start](./startup.md)
 
 ## Memory Segmentation
 
@@ -50,6 +52,8 @@ The final 20-bit address is $07C20$.
 
 Segment are base address and offset are index in arrays it will be like this
 `segment[offset]`
+
+in asm we reffer like this `07c0`:`0020`
 
 ## Registers
 The 8086 microprocessor is a 16-bit processor with a comprehensive set of 14 registers, all 16 bits wide, categorized into four groups: `General Purpose`, `Segment`, `Pointer & Index`. It also has a 16-bit `Flag Register` with 9 active flags.
@@ -267,59 +271,8 @@ If a disk's 1st 512byte is **MBR**, then it is bootable device
 What MBR contains?
 Small code which fit into 0 - 509 bytes, 510 and 511 is a special bytes, which makes this segment as **MBR**, which will store a signature in 510 and 511 location `0xAA55`, if the disk don't have this signature then boot loader will check for next device
 
-Bootloader always boot MBR code from `0x7c00` memory location
+BIOS always place boot MBR code from `0x07c00` memory location
 
-## How to debug
+To execute  `qemu-system-i386 -fda /tmp/boot.img`
 
-1. Compile: `nasm -f bin boot.asm -o /tmp/boot.img`
-2. Execute: `qemu-system-i386 -fda /tmp/boot.img -S -s`
-
-    -fda <boot_image_file>: Loads your bootable image (e.g., a 512-byte boot sector) as a floppy disk. You could also use -hda for a hard disk image.
-
-    -S: Do not start CPU at boot. QEMU will wait for a debugger connection before executing the first instruction.
-
-    -s: Start a GDB server on localhost:1234 (the default port).
-
-    Once these commad is executed qemu will wait for debugger
-
-3. Debugger
-
-    1. $ gdb
-    2. (gdb) target remote localhost:1234
-    3. (gdb) set architecture i8086
-    4. (gdb) break *0x7c00 // code start
-    5. continue
-
-    list command won't work as like debug c program, to list a code we have to examine the memory
-
-    6. x/10i $pc
-        This command is used to examine the current instruction, display from ccurrent instruction till next 10 instructions
-        10 indicates the num of instructions to display
-        $pc refers program counter, which points to current instruction
-
-        To diplay specific address : `x/10i *0x7c00`
-
-        To display data source index: `x/s $ds:$si`
-    7. stepi // move next
-
-To execute without debugger ``qemu-system-i386 -fda /tmp/boot.img`
-
-
-## Programs
-
-### 1. Simple Print and Segment Initialization
-        **BIOS INT 0x10** (Video), Segment Initialization (CS, DS, SS).
-### 2. Read Hard Disk Sector
-        **BIOS INT 0x13** (Disk I/O), Reading raw data from the disk, understanding LBA/CHS addressing.
-### 3. Load & Verify User Code
-        **Physical Memory Mapping**, Loading a second code sector (the "user program") into a high memory address (e.g., $0x1000:0000$).
-
-### 4. Transfer Control
-### 5. User Process Exit
-### 6. Print from User Space
-### 7. Install Custom ISR (INT 0x09)
-### 8. Basic PIC Setup
-### 9. Simple Timer Interrupt
-        switch between 2 tasks
-### 10. I/O Port Access
-### 11. Stack Switching
+[Programs](./program/README.md)
