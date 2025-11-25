@@ -31,13 +31,11 @@ start:
     ; Since DS is 0x7C0, we can use ES=0 and BX=0x7E00, 
     
     ; Simple way: Set ES=0 and use BX for the full offset.
-    mov bx, 0x07e0          ; Load Offset 0x7E00
+    mov bx, 0x07e0          ; Load Offset 0x07E0
     mov es, bx              ; ES = 0x7E00
     mov bx, 0x0000          ; Set BX (Offset) to 0x0000. 
                             ; Transfer address is ES:BX = 0x07E0:0x0000
                             ; 0x07E0 * 0x10 = 0x07E00 + 0x0000 = 0x07E00
-    ; if CS is copied to ES it would give wrong value => $cs = 0x0000, 0x07E0
-    ; 0x0000 * 0x10 = 0x00000 + 0x07E0 = 0x007E0
 
     ; --- Execute Disk Read ---
     int 0x13             ; Call Disk I/O Interrupt

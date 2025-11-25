@@ -4,6 +4,12 @@ In 8086 there only real mode is supported, linux won't run here, but we can get 
 
 ### 1. Simple Print and Segment Initialization
 
+Boot code will be found at `0x07c00`
+
+in asm our 1st line will be `ORG 0x7c00`, here  `0x7c00 == 0x07c00`, because preceding 0 has no value
+
+`0x07c00`, `0x7c000` these 2 are different address 
+
 **Segment Initialization (CS, DS, SS)**
 Point the segment where we need, Stack segment is used by local variable and interrupt. stack will grow downward, if we fill up many thing it might over write *IVT*
 
@@ -62,7 +68,9 @@ maximum addressable size of approximately
 
 [Program](./read_hard_disk.asm)
 
-### 3. Load & Verify User Code
+### 3. Load & Run User Code
+
+IN 8086 there is no concept of kernel mode/ user mode and real mode / protected mode, every program have same level of authority and every thing run only in real mode
 
 This is same as above program, written in different way
 
@@ -81,15 +89,57 @@ ji@ji-MS-7E26:~$ ls -la /tmp/bo*
 [Program1](./3/load.asm)
 [Program2](./3/user.asm)
 
-### 4. Transfer Control
-### 5. User Process Exit
-### 6. Print from User Space
-### 7. Install Custom ISR (INT 0x09)
-### 8. Basic PIC Setup
-### 9. Simple Timer Interrupt
+### 4. Install Custom ISR (INT 0x09)
+
+Keyboad's hardcoded interrupt is `Type 0x09`, we will be writing a small custom function, which will over write the existing  
+
+IVT is 4 bytes, 1st two bytes have offset and second 2 bytes will have the segment
+
+[Read](../InOut.md)
+
+`in` command to fetch from address
+
+When we type some thing keyboard controller will place the scaned code at `0x60`, using `in` we are reading, if we don't read buffer will not be empties and interrupt will be in locked stage
+
+
+`out` command to send to address
+
+Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI`, don't confuse `out 0x20 al`,`out 0x20 <reg>` this 20 indicate CPU send command to PIC, reg will hold the command in our example it is `0x20` which mean `EOI`, `iret` mean return from interrupt 
+
+[Program](./custom_iv.asm)
+
+### 5. User Process, Stack Switching and Exit
+   do maual stack switch
+
+   You must update both $\text{SS}$ and $\text{SP}$ atomically. If you change $\text{SS}$ and an interrupt occurs before you change $\text{SP}$, the interrupt will use the new $\text{SS}$ with the old $\text{SP}$, causing a crash (stack overflow/underflow). You must disable interrupts before changing $\text{SS}$ and $\text{SP}$.
+
+
+   Idea is to mimic kernel and user process
+   
+   `int 0x80` is available for user, when interrupt `0x80` is hitted based on the `ah` value perform the action
+
+   if ah == 0x01 print
+
+   if ah == 0x02 exit
+
+   `nasm -f bin 5/loader.asm -o /tmp/boot1.bin`
+
+   `nasm -f bin 5/user.asm -o /tmp/boot2.bin`
+
+   `cat /tmp/boot1.bin /tmp/boot2.bin > /tmp/boot.img`
+
+   `qemu-system-i386 -fda /tmp/boot.img -nographic`
+
+### 6. Basic PIC Setup
+        
+
+        * memory mapping
+### 7. I/O Port Access
+        * Key Concept: Memory-Mapped vs. Port I/O
+### 8. Simple Timer Interrupt
         switch between 2 tasks
-### 10. I/O Port Access
-### 11. Stack Switching
+        use 2 c programs
+
 
 ## Refer
 

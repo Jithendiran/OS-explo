@@ -53,10 +53,10 @@ The classic PC memory map is divided into two major regions: **Conventional Memo
 2. Signature Check: The BIOS checks for the valid boot signature ($\mathbf{0xAA55}$) at the very end of the 512-byte sector (offsets $\text{0x1FE}$ == 510 and $\text{0x1FF}$ == 511). If the signature is not found, the BIOS moves to the next boot device.
 
 3. Boot Sector Load: If the signature is valid, the BIOS loads the entire 512-byte boot sector (which contains the first-stage bootloader code) into a specific memory location:
- * Physical Address: $\mathbf{0x07C00} \implies \mathbf{0x0000}:\mathbf{0x7C00}$
+ * Physical Address: $\mathbf{0x07C00} \implies \mathbf{0x07C0}:\mathbf{0x0000}$
  * Note: IBM pc came with MSDOS - it's size is $\text{32 KiB}$. This address was chosen by the original IBM PC designers to leave $\text{1 KB}$ space ($\text{0x7C00}$ to $\text{0x7FFF}$) below the $\text{32 KiB}$ memory boundary ($\text{0x8000}$) for the bootloader, its stack, and any data it needs, while keeping the lowest memory free for the IVT and BIOS data area. 
 
 4. Transfer Control: The BIOS finally transfers execution control to the loaded bootloader by issuing a far jump or a return instruction that sets the CPU's registers to point to the start of the newly loaded code:
 
-    * CS:IP is set to $\mathbf{0x0000:0x7C00}$ which resolve to the physical address $\mathbf{0x07C00}$.
+    * CS:IP is set to $\mathbf{0x7C00:0x0000}$ which resolve to the physical address $\mathbf{0x07C00}$.
 
