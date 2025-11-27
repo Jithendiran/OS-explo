@@ -58,5 +58,100 @@ The classic PC memory map is divided into two major regions: **Conventional Memo
 
 4. Transfer Control: The BIOS finally transfers execution control to the loaded bootloader by issuing a far jump or a return instruction that sets the CPU's registers to point to the start of the newly loaded code:
 
-    * CS:IP is set to $\mathbf{0x7C00:0x0000}$ which resolve to the physical address $\mathbf{0x07C00}$.
+    * CS:IP is set to $\mathbf{0x07C0:0x0000}$ which resolve to the physical address $\mathbf{0x07C00}$.
 
+---
+
+| Segment:Offset Pair  | Linear Address | What it is |
+| :--- | :--- | :--- |
+| **$0x0000:0x7C00$**  | $0x07C00$ | **Most Common** convention, especially for floppy/hard disk boots. |
+| **$\mathbf{0x07C0:0x0000}$** | $0x07C00$ | **Alternate** convention used by some older or CD-ROM BIOS implementations. |
+
+So best thing here is to always confirm the working system how it initilize
+
+#### How to check the start address?
+
+
+After compilation we would get a binary file, bydecoding it we will get some idea
+
+command to decode `ndisasm -o 0x7c00 /tmp/boot.img`
+
+```
+Segment:Offset      Machine Code        Human-readable - asm
+-------------------------------------------------------------
+00007C00            8CC8                mov ax,cs
+00007C02            8ED8                mov ds,ax
+00007C04            8ED0                mov ss,ax
+00007C06            BCFFFF              mov sp,0xffff
+00007C09            683412              push word 0x1234
+00007C0C            E80700              call 0x7c16
+00007C0F            9A197CC007          call 0x7c0:0x7c19
+00007C14            EBFE                jmp short 0x7c14
+00007C16            B06A                mov al,0x6a
+00007C18            C3                  ret
+00007C19            B06A                mov al,0x6a
+00007C1B            C3                  ret
+00007C1C            0000                add [bx+si],al
+00007C1E            0000                add [bx+si],al
+00007C20            0000                add [bx+si],al
+00007C22            0000                add [bx+si],al
+00007C24            0000                add [bx+si],al
+00007C26            0000                add [bx+si],al
+...
+00007DFE            55                  push bp
+00007DFF            AA                  stosb
+```
+
+Here address is `00007C00` means `0x000:0x07c0`, here problem with this approach is `-o 0x7c00` we are expliciting setting the address, if we remove the option it will look like below 
+
+```
+$ ndisasm  /tmp/boot.img
+00000000  8CC8              mov ax,cs
+00000002  8ED8              mov ds,ax
+00000004  8ED0              mov ss,ax
+00000006  BCFFFF            mov sp,0xffff
+00000009  683412            push word 0x1234
+0000000C  E80700            call 0x16
+...
+000001FC  0000              add [bx+si],al
+000001FE  55                push bp
+000001FF  AA                stosb
+```
+
+best way to verify is to do live debugging
+
+1. command `qemu-system-i386 -fda /tmp/boot.img -nographic -s -S` to start the program
+
+2. In new terminal connect with gdb, and stop at address
+`break *0x7c00`
+
+`0x7c00` == `0x07c00` , we are placing the debugging as linear address, so what ever the approach it followed to init the cs, it always lead to linear address `0x7c00`
+
+3. examine the registers
+```
+0x0000fff0 in ?? ()
+(gdb) break *0x07c00
+Breakpoint 1 at 0x7c00
+(gdb) c
+Continuing.
+
+Breakpoint 1, 0x00007c00 in ?? ()
+(gdb) info registers cs eip ss
+ss   sse  
+(gdb) info registers cs eip ss esp ds 
+cs             0x0                 0
+eip            0x7c00              0x7c00
+ss             0x0                 0
+esp            0x6f08              0x6f08
+ds             0x0                 0
+(gdb) 
+
+```
+
+As per the GDB CS:IP is setted to `0x0:0x7c00`  which is equal to `0x0000:0x7c00`
+
+so this point CS:IP is set to $\mathbf{0x07C0:0x0000}$ historically may be correct, i don't have actual 8086 hardware and it's component to verify it's true nature
+
+better approach is always verify
+
+We might confuse why `IP` named as `eip`, this is knows as extended registers, that we will get to know in future, since we run in modern hardware this will be the case, i tried the same with `bochs emulator` it also set the same `cs:ip` of `0x0000:0x7c00`

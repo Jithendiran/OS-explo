@@ -6,7 +6,7 @@ start:
     mov ax, cs
     mov ds, ax      
     mov ss, ax      
-    mov sp, 0xffff  ; Stack Pointer to top of segment (0x7C00:FFFF) => start from 0x8BFFF
+    mov sp, 0xffff  ; Stack Pointer to top of segment (0x0000:0xFFFF) => start from 0x0FFFF, grow in downwards, if stack push 2 bytes of data next address is 0x0FFFF - 2 = 0x0FFFD
 
     ; --- Print Message ---
     mov si, MESSAGE_LOAD

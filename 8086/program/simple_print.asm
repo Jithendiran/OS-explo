@@ -16,14 +16,14 @@ start:
 
     ; Setup Data Segment (DS)
     ; The DS register MUST point to the segment where our MESSAGE is stored.
-    ; Since our code starts at 0x7C00, and our message is right after the code, 
+    ; Since our code starts at 0x0000:0x7C00, and our message is right after the code, 
     ; we need DS to point to the same segment as the code (CS).
     mov ax, cs          ; Copy the Code Segment (CS) value into AX
     mov ds, ax          ; Set the Data Segment (DS) to the same value
 
     ; SI (Source Index) will point to the beginning of our message string.
     ; MESSAGE holds the offset address
-    mov si, MESSAGE     ; SI now holds the OFFSET of the MESSAGE label
+    mov si, MESSAGE     ; SI now holds the OFFSET of the MESSAGE label, now with the combination of ds:si, we get the correct address
 
     ;Setup Video Function
     mov ah, 0x0e        ; BIOS Teletype function (INT 0x10)

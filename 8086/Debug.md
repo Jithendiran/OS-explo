@@ -102,3 +102,4 @@ even here \$0xf000e05b is wrong, it still see as 32-bit, but ljmp statement is c
 | **Examine String** | `x/s $ds:0xOFFSET` | Displays the null-terminated string pointed to by the Segment ($\text{\$ds}$) and Offset ($\text{0xOFFSET}$). |
 | **View Registers** | `info registers` | Displays all general-purpose registers ($\text{AX}$, $\text{BX}$, $\text{CX}$, etc.) and segment registers ($\text{CS}$, $\text{DS}$, etc.). |
 | **Set Register** | `set $ax = 0x1234` | Changes the value of the $\text{AX}$ register to $\text{0x1234}$. |
+| **Clear screen** | `shell clear`      | Clear the gdb screen|

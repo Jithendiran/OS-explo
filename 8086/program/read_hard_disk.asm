@@ -32,11 +32,11 @@ start:
     ; Since DS is 0x7C0, we can use ES=0 and BX=0x7E00, 
     
     ; Simple way: Set ES=0 and use BX for the full offset.
-    mov bx, 0x07e0          ; Load Offset 0x07E0
-    mov es, bx              ; ES = 0x7E00
-    mov bx, 0x0000          ; Set BX (Offset) to 0x0000. 
-                            ; Transfer address is ES:BX = 0x07E0:0x0000
-                            ; 0x07E0 * 0x10 = 0x07E00 + 0x0000 = 0x07E00
+    mov bx, 0x0000          ; Load segment 0x0000
+    mov es, bx              ; ES = 0x0000
+    mov bx, 0x7e00          ; Set BX (Offset) to 0x7e00. 
+                            ; Transfer address is ES:BX = 0x0000:0x7e00
+                            ; 0x0000 * 0x10 = 0x00000 + 0x7E00 = 0x07E00
 
     ; --- Execute Disk Read ---
     int 0x13             ; Call Disk I/O Interrupt
