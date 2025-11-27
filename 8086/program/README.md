@@ -2,6 +2,14 @@
 
 In 8086 there only real mode is supported, linux won't run here, but we can get some grip on basics. These programs are enough to get the grip
 
+`nasm -f bin boot.asm -o /tmp/boot.img` To compile the code
+
+`ndisasm -o 0x7c00 /tmp/boot.img` To view the compiled code
+
+`qemu-system-i386 -fda /tmp/boot.img -nographic` To execute the without graphics, we can't access keyboard and other stuffs
+
+`qemu-system-i386 -fda /tmp/boot.img ` To start with graphics mode, we can access keyboard
+
 ### 1. Simple Print and Segment Initialization
 
 Boot code will be found at `0x07c00`
@@ -89,7 +97,25 @@ ji@ji-MS-7E26:~$ ls -la /tmp/bo*
 [Program1](./3/load.asm)
 [Program2](./3/user.asm)
 
-### 4. Install Custom ISR (INT 0x09)
+### 4. CALL and INT
+
+* The $\text{CALL}/\text{RET}$ Flow (Subroutine)
+  - A standard $\text{CALL}$ only pushes $\text{CS}:\text{IP}$ onto the stack. The $\text{RET}$ only restores $\text{CS}:\text{IP}$.
+  - Stack: $\text{CALL}$ pushes 4 bytes ($\text{CS}$ and $\text{IP}$). $\text{RET}$ pops 4 bytes.
+  - Registers: Only $\text{CS}$ and $\text{IP}$ are affected for the flow change. Flags are untouched.
+  
+  [Program](./4/call.asm)
+
+* The $\text{INT}/\text{IRET}$ Flow (Interrupt)
+  - An $\text{INT}$ pushes $\text{Flags}$, $\text{CS}$, and $\text{IP}$ onto the stack. The $\text{IRET}$ restores all three. This requires setting up the Interrupt Vector Table (IVT) first. 
+  - Stack: $\text{INT}$ pushes 6 bytes ($\text{Flags, CS, and IP}$). $\text{IRET}$ pops 6 bytes.
+  - Flags: $\text{INT}$ automatically disables interrupts (clears $\text{IF,TF}$). $\text{IRET}$ automatically restores the original Flag state (re-enabling interrupts).
+
+  while executing interrupt, hardware `INTR` cannot happen, for more info [Read](../README.md#interrupt-hierarchy-and-scenarios) 
+
+  [Program](./4/int.asm)
+
+### 5. Install Custom ISR (INT 0x09)
 
 Keyboad's hardcoded interrupt is `Type 0x09`, we will be writing a small custom function, which will over write the existing  
 
@@ -108,13 +134,20 @@ Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI
 
 [Program](./custom_iv.asm)
 
-### 5. User Process, Stack Switching and Exit
+### 6. User Process, Stack Switching and Exit
    do maual stack switch
 
    You must update both $\text{SS}$ and $\text{SP}$ atomically. If you change $\text{SS}$ and an interrupt occurs before you change $\text{SP}$, the interrupt will use the new $\text{SS}$ with the old $\text{SP}$, causing a crash (stack overflow/underflow). You must disable interrupts before changing $\text{SS}$ and $\text{SP}$.
 
 
    Idea is to mimic kernel and user process
+
+   why are we using int 0x80, iret over call and ret?
+   we can achieve the same result by using using call and return
+   idea is to when we are handling the kernel code it has to disable the interrupts, it has to focus only on kernel part of code
+
+   call, ret vs int, iret
+   same program  
    
    `int 0x80` is available for user, when interrupt `0x80` is hitted based on the `ah` value perform the action
 
@@ -130,13 +163,13 @@ Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI
 
    `qemu-system-i386 -fda /tmp/boot.img -nographic`
 
-### 6. Basic PIC Setup
+### 7. Basic PIC Setup
         
 
         * memory mapping
-### 7. I/O Port Access
+### 8. I/O Port Access
         * Key Concept: Memory-Mapped vs. Port I/O
-### 8. Simple Timer Interrupt
+### 9. Simple Timer Interrupt
         switch between 2 tasks
         use 2 c programs
 

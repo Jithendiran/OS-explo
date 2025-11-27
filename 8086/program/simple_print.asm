@@ -1,4 +1,5 @@
 ;nasm -f bin simple_print.asm -o /tmp/boot.img
+;ndisasm -o 0x7c00 /tmp/boot.img 
 ;qemu-system-i386 -fda /tmp/boot.img -nographic
 
 

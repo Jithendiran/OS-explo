@@ -1,4 +1,5 @@
 ;nasm -f bin custom_iv.asm -o /tmp/boot.img
+;ndisasm -o 0x7c00 /tmp/boot.img
 ;qemu-system-i386 -fda /tmp/boot.img
 
 ORG 0x7c00

@@ -162,8 +162,8 @@ The 256 interrupt types are categorized as follows:
 ### The Interrupt Process
 When an interrupt occurs, the CPU performs the following sequence:
 
-1. Save Context: The CPU pushes the current state of its crucial registers, primarily the Flags Register (FLAGS), the Code Segment (CS), and the Instruction Pointer (IP), onto the stack. This saves the return address (CS:IP) and the status of the program being interrupted.
-2. Disable/Clear Flags: The CPU typically clears the Interrupt Flag (IF) and the Trap Flag (TF) to prevent new maskable interrupts or single-stepping during the ISR.
+1. Save Context: The CPU pushes the current state of its crucial registers, primarily the Flags Register (**FLAGS**), the Code Segment (**CS**), and the Instruction Pointer (**IP**), onto the stack. This saves the return address (CS:IP) and the status of the program being interrupted.
+2. Disable/Clear Flags: The CPU typically **clears** the Interrupt Flag (**IF**) and the Trap Flag (**TF**) to prevent new maskable interrupts or single-stepping during the ISR.
 3. Identify Handler: The CPU determines the Interrupt Type Number (a value from 0 to 255).9 It uses this number as an index into the Interrupt Vector Table (IVT), which is stored in the first $1\text{ KB}$ of memory ($0000\text{H}$ to $03\text{FFH}$).
 4. Load ISR Address: The IVT entry contains the 4-byte (16-bit CS and 16-bit IP) segmented address of the corresponding ISR. The CPU loads these new CS:IP values.
 5. Execute ISR: The CPU executes the ISR.
@@ -259,7 +259,60 @@ The CPU does not automatically save the General Purpose (AX, BX, CX, DX) or Inde
 
 * The Stack is Essential: The entire interrupt mechanism relies on the stack. The CPU pushes the FLAGS, CS, and IP onto the stack using the current SS:SP pair. The stack must be configured correctly and have enough space to handle the interrupt and any registers the ISR might push manually.
 
----
+### Interrupt Hierarchy and Scenarios
+
+What happens when cpu is executing ISR, another interrupt occured
+
+#### 1. $\text{INTR}$ While in an ISR (Prevented)
+* Scenario: A peripheral device (like a keyboard) raises the $\text{INTR}$ line, but the CPU is currently executing an ISR (for, say, $\text{Int } \text{x80}$).
+* Result: Nothing happens immediately. Since the CPU cleared the Interrupt Flag ($\text{IF}$) when it entered the first ISR, the $\text{INTR}$ signal is ignored (masked).
+* Resolution: The $\text{INTR}$ signal must wait. When the current ISR finishes and executes the $\text{IRET}$ instruction, the original state of the $\text{Flags}$ (including $\text{IF}$) is restored. If the original $\text{IF}$ was set, interrupts are re-enabled, and the pending $\text{INTR}$ request will be serviced immediately after the return.
+
+The $\text{8259A}$ has 8 interrupt request lines, labeled $\text{IR0}$ through $\text{IR7}$. It contains an Interrupt Request Register ($\text{IRR}$), which is essentially an 8-bit register. If an interrupt signal is received on $\text{IRx}$, the corresponding bit in the $\text{IRR}$ is set to '1'. This bit represents the pending state.
+
+Therefore, you can have up to 8 hardware $\text{INTR}$ requests pending (waiting in the $\text{8259A}$'s $\text{IRR}$) while the CPU is executing a critical section of code with $\text{IF}=0$. Once $\text{IF}$ is restored to 1 by an $\text{IRET}$, the $\text{8259A}$ immediately raises the $\text{INTR}$ line again to service the next highest-priority pending request.
+
+The default service order for pending interrupts is strictly based on the $\text{IR}$ line number, from lowest index to highest index, which corresponds to the highest priority to lowest priority. 
+
+$$\mathbf{IR0} \text{ is highest,} \mathbf{IR1} \text{ is lowset}$$
+
+The $\text{8259A}$ is "Programmable," which means this default priority can be altered
+
+#### 2. Software Interrupt ($\text{INT}$ instruction) While in an ISR (Possible)
+* Scenario: Your code, running within the $\text{Int } \text{x80}$ handler, executes another software interrupt, such as $\text{int } \text{21h}$ or perhaps a call to a simpler print routine $\text{int } \text{10h}$.
+* Result: The new software interrupt will execute immediately.
+* Why: The $\text{INT}$ instruction is just another CPU instruction. Unlike the hardware-triggered interrupt, the CPU executes it directly. It does not check the $\text{IF}$ flag.
+* Action: The CPU performs a complete interrupt sequence:
+  - It pushes the current $\text{Flags}$, $\text{CS}$, and $\text{IP}$ (the return address inside the first ISR) onto the current stack (which is the kernel stack).
+  - It reads the vector from the Interrupt Vector Table (IVT).
+  - It jumps to the second ISR.
+* Nesting: This creates nested interrupts. When the second ISR finishes, it executes $\text{IRET}$ to return to the instruction inside the first ISR. The first ISR then completes its work and executes its $\text{IRET}$ to return to the user program
+
+#### 3. Non-Maskable Interrupt ($\text{NMI}$) While in an ISR (Forced Preemption)
+* Scenario: The $\text{NMI}$ pin is triggered (e.g., a critical memory error or watchdog timer event) while the CPU is executing the $\text{Int } \text{x80}$ handler.
+* Result: The current ISR is preempted immediately, regardless of the state of the $\text{IF}$ flag.
+* Why: The $\text{NMI}$ is non-maskable. The $\text{IF}$ flag is irrelevant.
+* Action:
+  - The CPU pushes the current $\text{Flags}$, $\text{CS}$, and $\text{IP}$ onto the current stack (the kernel stack).
+  - It automatically vectors to the $\text{NMI}$ ISR (vector 2, address $0000:0008$).
+  -  It jumps to the $\text{NMI}$ ISR.
+* NMI ISR: The $\text{NMI}$ handler runs. When completed it willdo $\text{IRET}$ to resume the code that was interrupted (which was the first kernel $\text{Int } \text{x80}$ handler).
+
+## TF vs INT 0x3
+
+TF ($\text{Trap Flag}$) and $\text{INT 3}$ are both mechanisms used on the x86 architecture primarily for debugging, but they operate in fundamentally different ways.
+
+### TF
+
+* It is available in $\text{RFLAGS}$
+* It is automatic, meaning per-instruction, exception generation by the CPU Hardware. For each instruction it generate  exception (kind of break point in this context) it is also know as Single-Stepping
+* Automatically triggers the Debug Exception (Interrupt Vector $\text{1}$) after an instruction executes.
+
+### INT 0x3
+
+* Software Interrupt Instruction 
+* Explicit instruction inserted into the code by a debugger or programmer. Sets a Software Breakpoint, Execution proceeds normally until the instruction is hit.
+* Explicitly triggers the Breakpoint Exception (Interrupt Vector $\text{3}$) when the instruction is executed.
 
 ## Boot device/disk
 
