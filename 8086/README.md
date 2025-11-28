@@ -1,5 +1,30 @@
 # 8086
 
+The 8086 is a 16-bit microprocessor that operates based on a fundamental principle known as the fetch-decode-execute cycle. A unique feature of the 8086 is its internal architecture, which is logically divided into two units that work in parallel to improve performance:
+
+## A. Bus Interface Unit (BIU)
+The BIU handles all memory and I/O (Input/Output) access. Its primary responsibilities are:
+* Address Generation: It calculates the 20-bit physical memory address using the segment register and offset value.
+* Bus Control: It manages the Address Bus (20 lines) and the Data Bus (16 lines) to communicate with external devices.
+* Instruction Fetch: It prefetches up to 6 bytes of instruction code from memory (RAM) and stores them in a Queue. This is crucial for pipelining.
+
+## B. Execution Unit (EU)
+The EU is responsible for decoding and executing instructions. Its primary responsibilities are:
+* Instruction Decoding: It takes the instruction bytes from the BIU's queue.
+* Execution: It uses the Arithmetic Logic Unit (ALU) to perform the arithmetic and logical operations specified by the instruction.
+* Register Management: It manages the general-purpose registers (like $\text{AX}$, $\text{BX}$, $\text{CX}$, $\text{DX}$) for data manipulation and addressing.
+* Flag Management: It updates the Flag Register after an ALU operation to reflect the status of the operation (e.g., Carry, Zero, Sign).
+
+The BIU fetches the next instructions while the EU is currently executing the previous instruction. This overlap is known as pipelining, and it allows the 8086 to process instructions faster than if the two actions happened strictly one after the other.
+
+## 8086 PINS
+
+The 8086 is a 40-pin chip. The pins are generally categorized by their function. Since the 8086 can operate in two different modes—Minimum Mode (for small systems with one processor) and Maximum Mode (for multi-processor systems)—some pins have dual functions.
+
+Here we mostly focus only on Minimum Mode
+[Refer](./pin.md)
+---
+
 The 8086 microprocessor's architecture is built around segmentation, a collection of 16-bit registers for various purposes, and a 16-bit Flag register to reflect the CPU's status and control operations. It has $1\text{ MB RAM}$, 20 bit address bus
 
 [Refer How 8086 start](./startup.md)
@@ -313,6 +338,23 @@ TF ($\text{Trap Flag}$) and $\text{INT 3}$ are both mechanisms used on the x86 a
 * Software Interrupt Instruction 
 * Explicit instruction inserted into the code by a debugger or programmer. Sets a Software Breakpoint, Execution proceeds normally until the instruction is hit.
 * Explicitly triggers the Breakpoint Exception (Interrupt Vector $\text{3}$) when the instruction is executed.
+
+## DMA (Direct Memory Access)
+
+DMA is a mechanism that allows certain hardware subsystems (like a disk drive controller) to access system memory directly, without requiring the CPU to constantly manage the transfer.
+
+* It speeds up memory operations, especially for bulk data transfers, by freeing up the CPU to perform other tasks.
+* The 8086 provides control signals like $\text{HOLD}$ and $\text{HLDA}$ (Hold Acknowledge) that allow the CPU to temporarily stop control of the system buses to the DMA controller.
+
+## Bus
+
+A bus is a set of parallel electrical conductors (wires) used to transmit data between components inside a computer system. The 8086 uses a system bus comprised of three main parts:
+
+1. Address Bus: Used by the CPU (or DMA) to specify the physical memory address or I/O port it wants to read from or write to. The 8086 has a 20-bit address bus (lines $\text{A}_0$ to $\text{A}_{19}$), allowing it to address $2^{20} = 1\text{MB}$ of memory.
+
+2. Data Bus: Used to transfer data between the CPU and memory/I/O devices. The 8086 has a 16-bit data bus (lines $\text{D}_0$ to $\text{D}_{15}$).
+
+3. Control Bus: Used to carry control signals that govern the activities on the system, such as $\text{READ}/\text{WRITE}$ signals, $\text{Ready}$, and $\text{Interrupt}$ signals.
 
 ## Boot device/disk
 
