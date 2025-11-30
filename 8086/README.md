@@ -2,93 +2,8 @@
 
 The 8086 is a 16-bit microprocessor that operates based on a fundamental principle known as the fetch-decode-execute cycle. A unique feature of the 8086 is its internal architecture, which is logically divided into two units that work in parallel to improve performance:
 
-## A. Bus Interface Unit (BIU)
-The BIU handles all memory and I/O (Input/Output) access. Its primary responsibilities are:
-* Address Generation: It calculates the 20-bit physical memory address using the segment register and offset value.
-* Bus Control: It manages the Address Bus (20 lines) and the Data Bus (16 lines) to communicate with external devices.
-* Instruction Fetch: It prefetches up to 6 bytes of instruction code from memory (RAM) and stores them in a Queue. This is crucial for pipelining.
+[Architecture](./Arch.md)
 
-## B. Execution Unit (EU)
-The EU is responsible for decoding and executing instructions. Its primary responsibilities are:
-* Instruction Decoding: It takes the instruction bytes from the BIU's queue.
-* Execution: It uses the Arithmetic Logic Unit (ALU) to perform the arithmetic and logical operations specified by the instruction.
-* Register Management: It manages the general-purpose registers (like $\text{AX}$, $\text{BX}$, $\text{CX}$, $\text{DX}$) for data manipulation and addressing.
-* Flag Management: It updates the Flag Register after an ALU operation to reflect the status of the operation (e.g., Carry, Zero, Sign).
-
-The BIU fetches the next instructions while the EU is currently executing the previous instruction. This overlap is known as pipelining, and it allows the 8086 to process instructions faster than if the two actions happened strictly one after the other.
-
-## 8086 PINS
-
-The 8086 is a 40-pin chip. The pins are generally categorized by their function. Since the 8086 can operate in two different modes—Minimum Mode (for small systems with one processor) and Maximum Mode (for multi-processor systems)—some pins have dual functions.
-
-Here we mostly focus only on Minimum Mode
-
-[Refer](./pin.md)
-
-## Bus
-
-A bus is a set of electrical conductors (wires/pins) used to transmit data between components inside a computer system. The 8086 uses a system bus comprised of three main parts:
-
-1. Address Bus: Used by the CPU (or DMA) to specify the physical memory address or I/O port it wants to read from or write to. The 8086 has a 20-bit address bus (lines $\text{A}_0$ to $\text{A}_{19}$), allowing it to address $2^{20} = 1\text{MB}$ of memory.
-
-2. Data Bus: Used to transfer data between the CPU and memory/I/O devices. The 8086 has a 16-bit data bus (lines $\text{D}_0$ to $\text{D}_{15}$).
-
-3. Control Bus: Used to carry control signals that govern the activities on the system, such as $\text{READ}/\text{WRITE}$ signals, $\text{Ready}$, and $\text{Interrupt}$ signals.
-
-## Bus Control Terminology
-
-| Terminology | Simple Meaning | Doer (Initiator) | Recipient (Target) | Example Statement | Explanation of Roles |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Latch** | To **capture and hold** a changing value (like an address) at a specific moment. | External **Latch Circuit** (e.g., 8282 chip) | Memory or I/O device | "The external latch circuit must **latch** the address during T1." | **Doer:** The Latch circuit physically captures the data. **Recipient:** The captured address is for the Memory chip's use. |
-| **Strobe** | A brief, timed **signal pulse** used to trigger an action (specifically the latching of data/address). | **CPU** (e.g., the $\text{ALE}$ pin) | External Latch Circuit | "The CPU **strobes** the $\text{ALE}$ signal HIGH to indicate the address is ready." | **Doer:** The CPU sends the timing signal. **Recipient:** The Latch circuit receives the signal and performs the latching action. |
-| **Assert** | To **activate** a signal by driving the pin to its active voltage level (usually Low for 8086 control signals). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **asserts** the $\text{RD}'$ signal to start a memory read." | **Doer:** The CPU sets the pin to the active state (LOW). (In this example it is LOW, for some other operations it will be HIGH. It depends on the pins, here activate doesn't mean power up, it means process has to start. Some operation will start on low signal, some on high) **Recipient:** The Memory chip sees the signal and prepares to output data. |
-| **Deassert** | To **deactivate** a signal by driving the pin to its inactive voltage level (usually High). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **deasserts** the $\text{WR}'$ signal to complete the write operation." | **Doer:** The CPU releases the pin back to the inactive state (HIGH). **Recipient:** The Memory chip stops transferring data and saves the value. |
-| **Sample** | To **read (check)** the current logical state (High or Low) of an input signal at a precise moment. | **CPU** | External Device Signal (e.g., $\text{READY}$) | "The CPU **samples** the $\text{READY}$ line near the end of $\text{T3}$." | **Doer:** The CPU performs the internal reading operation. **Recipient:** The $\text{READY}$ signal from the external device provides the information. |
-| **Drive** | To actively **apply a voltage** (High or Low) to a bus line, essentially "putting data or address onto the bus." | **CPU** or **Memory/I/O** | The Bus (Data or Address) | "The Memory chip **drives** the requested data onto the Data Bus." | **Doer:** The Memory chip actively places the electrical signals on the bus wires. **Recipient:** The CPU is the ultimate recipient, waiting to read the data from the bus. |
-
-##  Bus Cycles, T-States, READY Signal and WAIT States
-
-In the 8086 microprocessor, all external communications (like reading an instruction, reading data from memory, or writing data to an I/O port) are organized into **Bus Cycles** (also called **Machine Cycles**).
-
-A Bus Cycle is a complete sequence of events for a single bus operation. It has 4 T-state
-
-### T-State Definition
-A **T-State** (or **Clock State**) is the most basic unit of time in the 8086 timing. It is equal to one period of the system clock ($T_{CLK}$).
-
-### The Standard Bus Cycle (Minimum of 4 T-States)
-Every standard 8086 bus cycle (Read, Write, I/O Read, I/O Write, etc.) is composed of a minimum of **four T-states**, designated as $\mathbf{T1, T2, T3}$, and $\mathbf{T4}$.
-
-| T-State | Primary Action | Purpose |
-| :--- | :--- | :--- |
-| **T1** | **Address Out** | The 8086 places the 20-bit memory address or 16-bit I/O address onto the multiplexed Address/Data Bus (A/D lines). The **ALE** (Address Latch Enable) signal is active high during this state to allow external latches to capture the address. |
-| **T2** | **Set up Control Signals** | The 8086 removes the address and asserts the control signals (like $\text{RD}'$ or $\text{WR}'$, $\text{DEN}'$, $\text{DT}/\text{R}'$) to specify the type and direction of the operation (e.g., Read from Memory). |
-| **T3** | **Data Transfer Window** | This is the main period where the addressed device (memory or I/O) is expected to respond. The device puts data onto the Data Bus (for a Read) or holds the written data on the bus (for a Write). **The READY signal is sampled near the end of T3.** |
-| **T4** | **Data Latch/Cleanup** | The 8086 completes the operation. For a Read, the CPU **latches (reads) the data** from the bus. For a Write, the CPU stops driving the $\text{WR}'$ signal, ending the write operation. All bus signals are typically deactivated. |
-
-
-### READY Signal and WAIT States
-
-The four T-states ($\text{T1-T4}$) assume the external memory or I/O device is fast enough to complete the data transfer within the allotted time. However, slower devices exist.
-
-### The READY Signal
-The **READY** pin is an input to the 8086 that synchronizes the CPU with slower external hardware.
-
-* **READY = HIGH (1):** The device is **ready**; it has completed the data transfer (e.g., the data is stable on the bus for a Read). The CPU proceeds to the next state ($\text{T4}$).
-* **READY = LOW (0):** The device is **not ready**; it needs more time to complete the operation.
-
-### WAIT States ($\mathbf{T_W}$)
-A **WAIT State** ($\mathbf{T_W}$) is an **extra clock period** (or T-state) that the 8086 inserts between $\text{T3}$ and $\text{T4}$ of the bus cycle.
-
-* **Function:** If the external device pulls the **READY** pin **LOW** (0) when the 8086 samples it (near the end of $\text{T2}$ and during $\text{T3}$), the 8086 will insert a $\text{TW}$ state instead of proceeding to $\text{T4}$.
-* **CPU Action:** During a WAIT state, the CPU is momentarily **idle** (stalled) on the bus, but it continues to assert the control signals and maintain the bus state, giving the slow device more time.
-* **Duration:** The 8086 will insert **consecutive $\mathbf{T_W}$ states** until the device sets the **READY** pin **HIGH** again, at which point the CPU immediately proceeds to $\text{T4}$ and finishes the cycle.
-
-$$\text{Bus Cycle } = T_{CLK} \times (4 + T_W)$$
-
-[Memory Flow](./memory-Flow.md)
-
-
----
 
 The 8086 microprocessor's architecture is built around segmentation, a collection of 16-bit registers for various purposes, and a 16-bit Flag register to reflect the CPU's status and control operations. It has $1\text{ MB RAM}$, 20 bit address bus
 
@@ -296,12 +211,13 @@ The 8086 has dedicated pins that external hardware devices use to signal an inte
 
     * INTR (Interrupt Request) Pin: The CPU checks the state of this pin at the end of every instruction. If the Interrupt Flag (IF) is set and the INTR pin is active, the CPU initiates an interrupt process
 
+    [Input/Output operations explained](./InOut.md)
+
 2. Instruction Execution (Internal Events)
 
     * Software Interrupts (INT n): The CPU recognizes it as part of instruction decoding.
     * CPU Exceptions: The Execution Unit (EU) detects error conditions during an instruction's execution, such as a divide-by-zero (Type 0) or an attempt to use the INTO instruction when the Overflow Flag (OF) is set (Type 4).
 
-[Input/Output operations explained](./InOut.md)
 
 ### How the CPU Identifies the Interrupt Type
 
@@ -463,21 +379,7 @@ While the CPU is idled by the DMA controller taking the buses, it is only paused
 - Arithmetic/Logical Operations on data currently held in its internal registers (e.g., $ADD AX, 10H$).
 - Instruction Pre-fetch Queue: The 8086 has a 6-byte instruction pre-fetch queue. If the queue is full and the transfer is short, the CPU can continue executing instructions from its queue for a brief moment until it needs to fetch a new instruction from memory.
 
-* Flow:
-
-    1. Setup: The CPU (running the OS/driver) programs the DMAC and the peripheral device with:
-
-        - The source (e.g., the disk's buffer or memory).
-
-        - The destination (a buffer address in main memory).
-
-        - The size (number of bytes to transfer).
-
-    2. Request: The Peripheral Device sends a DMA Request (DRQ) signal to the DMAC.
-
-    3. Transfer: The DMAC requests the Bus from the CPU using a Hold Request (HRQ). The CPU grants access (Hold Acknowledge - HLDA). The DMAC then becomes the temporary "bus master" and manages the transfer of the data block directly between the device and memory.
-
-    4. Completion: Once the block is transferred, the DMAC releases the bus and sends an Interrupt to the CPU.
+[Flow](./DMA.md)
 
 
 ## Boot device/disk
@@ -495,3 +397,5 @@ BIOS always place boot MBR code from `0x07c00` memory location
 To execute  `qemu-system-i386 -fda /tmp/boot.img`
 
 [Programs](./program/README.md)
+
+https://www.minuszerodegrees.net/5150/misc/5150_motherboard_diagrams.htm

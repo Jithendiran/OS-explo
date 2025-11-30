@@ -1,138 +1,184 @@
-# IN
+# I/O controller
 
-## How Keyboard works?
+I/O Controller (or Device Controller) is a separate hardware component or dedicated integrated circuit (IC) from the CPU and main RAM
 
-### Generation
+It acts as an interface or mediator between the fast, standard system bus (which the CPU and RAM use) and the slower, specialized peripheral device (like a keyboard, disk drive, or network card).
 
-1. Keystroke  
+The I/O controller is necessary because external I/O devices have characteristics that are vastly different from the CPU and memory:
 
-    `A` key is physically pressed. Key Switch Closure
+1.  **Protocol Translation:** The CPU communicates using simple read/write bus cycles. The I/O device (e.g., a hard drive) requires a complex sequence of commands and specialized signals. The controller translates the CPU's general command (e.g., "Read byte from port $378\text{H}$") into the device's specific control sequences.
+2.  **Buffering and Speed Matching:** I/O devices are significantly slower than the CPU and RAM. The controller contains **buffers** (small amounts of memory) to temporarily hold data, allowing the CPU to transfer a block of data quickly and move on, while the controller manages the slow, asynchronous transfer to the peripheral.
+3.  **Status and Control:** The controller provides **Control Registers** (for the CPU to send commands) and **Status Registers** (for the CPU to check if the device is ready, busy, or has errors).
+4.  **Interrupt Handling:** The controller can generate an **Interrupt** signal to the CPU when a long operation is complete or when the device requires attention (e.g., a keypress), freeing the CPU to perform other tasks while waiting.
 
-    Component : Keyboard
+In an 8086-based system, the I/O controllers are implemented using specialized, discrete ICs that connect to the system bus. Common examples from that era include:
 
-2. Scan code
+* **8255 Programmable Peripheral Interface (PPI):** A general-purpose IC used to provide flexible parallel I/O ports.
+* **8259 Programmable Interrupt Controller (PIC):** Manages interrupt requests from multiple I/O devices.
+* **8251 Universal Synchronous/Asynchronous Receiver/Transmitter (USART):** Used for serial communication.
 
-    The keyboard's internal controller generates a unique code for the key.
+The 8259 Programmable Interrupt Controller (PIC) is not a general I/O controller, but a specialized peripheral chip to which other I/O controllers (or their devices) are connected.
 
-    Component :  Keyboard Controller
+The typical **buffer storage** in an I/O controller or device interface is usually a small amount of **dedicated, fast memory** designed to hold data temporarily during the transfer between the peripheral device and the system bus (CPU/RAM).
 
-3. Data deposite
+The specific size and type depend on the device and its required throughput, but here are the general characteristics:
 
-    The Scan Code is sent to and stored in the dedicated Keyboard I/O Port on the motherboard. Scan Code stored at $\text{I/O}$ address $\mathbf{60\text{H}}$
+##  Characteristics of I/O Buffers
 
-    Component :  I/O Controller
+### 1. Small Capacity
+I/O buffers are typically **small** in size, ranging from a few **bytes** to a few **kilobytes (KB)**.
 
-### Signaling
+* **For simple devices (like a keyboard or serial port):** The buffer may only be a **single byte** or a small **FIFO (First-In, First-Out)** register to hold one or a few characters.
+* **For complex devices (like network cards or disk controllers):** The buffers can be larger, perhaps **$4 \text{KB}$ to $32 \text{KB}$**, designed to hold an entire network packet or a sector of disk data.
 
-4. IRQ
+### 2. Implementation Technology
+The buffer is usually implemented using fast, on-chip memory technologies:
 
-    The Keyboard $\text{I/O}$ port sends an $\text{IRQ}1$ signal to the $\mathbf{8259\text{A PIC}}$.
+* **Registers:** For the smallest buffers, they are simply part of the **control and status registers** of the I/O chip.
+* **SRAM (Static RAM):** For larger, faster buffers, the controller IC uses **SRAM** because it is faster than the main DRAM (Dynamic RAM) used for system memory, ensuring the controller can keep up with the burst speed of the system bus.
 
-    Component: I/O Controller
+### 3. Purpose: Decoupling and Speed Matching
 
-5. INTR
+The primary function of the buffer is **decoupling** the two sides:
 
-    The $\text{PIC}$ raises the INTR (Interrupt Request) pin 18 on the 8086 CPU.
+| Side | Characteristic | Role of Buffer |
+| :--- | :--- | :--- |
+| **Peripheral Device** | **Slow and Asynchronous** (data comes or goes when ready, e.g., a keypress). | The buffer **accepts bursts of data** from the system bus and holds it while the slow peripheral processes it (Write operation), or collects slow data from the peripheral and holds it until the system bus is ready for a fast transfer (Read operation). |
+| **CPU/System Bus** | **Fast and Synchronous** (data must be transferred within the $\text{T3/T4}$ states of a bus cycle). | The buffer ensures **data is immediately available** for the CPU on a read, preventing the need for excessive $\mathbf{T_W}$ (wait states) caused by the slow peripheral. |
 
-    Component: 8259A PIC
 
-6. Acknowledge
+## 8086 Minimum Mode Interrupt Processing Flow
 
-    The CPU stops what it's doing and sends an $\overline{INTA}$  (Interrupt Acknowledge) signal back to the $\text{PIC}$. Over Pin 24
+In Minimum Mode, the **8086 CPU directly outputs** the $\overline{\text{INTA}}$ signal, as that pin is dedicated for this function (Pin 24) instead of being the $\overline{\text{QS}1}$ pin as in Maximum Mode.
 
-    Component: 8086 CPU
 
-7.  Type Number
+### Phase 1: Signal Generation
 
-    In response, the $\text{PIC}$ sends the Interrupt Type Number to the CPU. Type 9 (for keyboard)
+| Action | Doer | Pins Involved | Note |
+:--- | :--- | :--- | :--- |
+| Physical Event | Keyboard/Mouse | $\text{N/A}$ | Keystroke occurs. |
+| Data Deposit | I/O Controller | $\text{I/O Data register}$ | Scan Code is stored in the peripheral's I/O Port. |
+| Interrupt Request | I/O Controller | $\mathbf{\text{IRQ}n}$ (e.g., $\text{IRQ1}$) | The I/O controller asserts its specific **Interrupt Request** line to the $\mathbf{8259\text{A PIC}}$. |
+| CPU Notification | 8259A PIC | $\mathbf{\text{INTR}}$ (CPU Pin 18) | The PIC drives the $\mathbf{\text{INTR}}$ pin **HIGH**, signaling the CPU that a device needs service. |
 
-    Component: 8259A PIC
 
-### Reading and Interpretation
+### Phase 2: CPU Acknowledge ($\overline{\text{INTA}}$ Bus Cycles)
 
-8.  Find Code
+The CPU, upon recognizing the $\text{INTR}$ and completing its current instruction, initiates two consecutive $\overline{\text{INTA}}$ bus cycles.
 
-    The CPU uses Type 9 to find the address of the Keyboard Interrupt Service Routine (ISR) in the Interrupt Vector Table. (This identifies the device as the keyboard.)
+#### **Cycle 1: Direct Acknowledge Signal**
 
-    Component: 8086 CPU
+| Action | Doer | Pin Signal | Purpose | Note |
+| :--- | :--- | :--- | :--- | :--- |
+| Acknowledge Output | 8086 CPU | $\mathbf{\overline{\text{INTA}}}$ (Pin 24) | Driven **LOW** to the **PIC**, telling it: "I hear you." | The 8086 itself asserts the $\overline{\text{INTA}}$ pin .  |
+| I/O Indicator | CPU | $\text{M}/\overline{\text{IO}}$ | **LOW** (I/O operation). | Indicates that the transfer involves an I/O device (the PIC). |
+| Data Bus | CPU | $\text{D0-D15}$ | **Tri-stated** (off). | Bus is not used to transfer data in this first cycle. |
+| Synchronization | 8259A PIC | $\text{READY}$ | PIC may drive $\text{READY}$ **LOW** to insert Wait states. | Standard bus cycle timing remains, allowing for Wait states. |
 
-9.  Read Data
 
-    The $\text{ISR}$ executes the $\mathbf{IN}$ instruction ($\text{IN AL, 60H}$), causing the CPU to read the stored Scan Code from the $\text{I/O}$ Port $\mathbf{60\text{H}}$. This will empty the buffer
+#### **Cycle 2: Fetch Interrupt Vector**
 
-    Component: 8086 CPU
+The CPU needs the 8-bit interrupt vector (or type number) from the 8259A PIC to locate the Interrupt Service Routine (ISR) address in the Interrupt Vector Table.
 
-10. End of Interrupt  (EOI)
+| Action | Doer | Pin Signal | Purpose |
+| :--- | :--- | :--- | :--- |
+| Vector Read Signal | **8086 CPU** | $\mathbf{\overline{\text{INTA}}}$ (Pin 24) | Driven **LOW** a second time. | This second pulse instructs the PIC to put the vector number on the data bus. |
+| Read Command | **8086 CPU** | $\mathbf{\overline{\text{RD}}}$ | Driven **LOW** (Asserted). | This is a standard **Read** command, but it is combined with $\overline{\text{INTA}}$ to signal the PIC specifically. |
+| Direction Control | **8086 CPU** | $\text{DT}/\overline{\text{R}}$ | **LOW** ($\overline{\text{R}}$ for Receive). | Tells the external data buffers (transceivers) that data is moving **INTO** the CPU. |
+| Data Transfer | 8259A PIC | $\mathbf{\text{D0-D7}}$ | PIC places the **8-bit Interrupt Vector Number** on the low 8 bits of the data bus. | The CPU reads this number (e.g., 08H for IRQ0) to determine which ISR to run. |
 
-    The $\text{ISR}$ sends a command to the $\text{8259A PIC}$ to clear the interrupt in its registers, preparing it to handle the next request.
 
-    Component: 8259A PIC
+### Phase 3: Saving State and Vectoring
 
-11. Translate
+Once the 8086 CPU has successfully fetched the 8-bit **Interrupt Vector Number** (let's call it $N$) from the 8259A PIC in **Cycle 2**, the CPU performs a sequence of internal, non-bus-cycle operations to transfer control to the Interrupt Service Routine (ISR). This is done automatically by the hardware.
 
-    The $\text{ISR}$ checks the Scan Code and translates the Scan Code into a final ASCII/Unicode character (e.g., 'a' or 'A').
+| Action | Doer | Pins Involved | Significance |
+| :--- | :--- | :--- | :--- |
+| Clear Interrupt Flags | CPU | Internal $\text{IF}$ and $\text{TF}$ | The **Interrupt Flag ($\text{IF}$)** is automatically **cleared ($\text{IF}=0$)** to prevent further maskable interrupts. The **Trap Flag ($\text{TF}$)** is also **cleared ($\text{TF}=0$)** to disable single-stepping. |
+| Push Flags | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **PUSH** operation to save the current contents of the 16-bit **Flags Register** onto the stack. |
+| Push CS | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **PUSH** operation to save the 16-bit **Code Segment ($\text{CS}$)** register onto the stack. This is the segment of the instruction that would have executed next. |
+| Push IP | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **PUSH** operation to save the 16-bit **Instruction Pointer ($\text{IP}$)** register onto the stack. This points to the exact instruction that was interrupted. |
+| Calculate Vector Address | CPU | Internal Logic | The CPU multiplies the 8-bit Vector Number ($N$) by 4 to get the $\mathbf{20\text{-bit}}$ physical address of the Interrupt Vector Table entry: $\text{Vector\_Address} = N \times 4$. |
+| Fetch ISR Address | CPU | $\text{AD0-AD19}, \overline{\text{RD}}, \text{M}/\overline{\text{IO}}$ (HIGH) | The CPU reads two $16\text{-bit}$ words from $\text{Vector\_Address}$: **New $\text{IP}$** (word 1) and **New $\text{CS}$** (word 2). This requires two consecutive memory **Read** bus cycles. **see memory Read cycle** |
+| Load Registers | CPU | $\text{CS}, \text{IP}$ | The fetched **New $\text{CS}$** is loaded into the **$\text{CS}$ register**, and the fetched **New $\text{IP}$** is loaded into the **$\text{IP}$ register**. |
+| Execute ISR | CPU | $\text{CS}, \text{IP}$ | The CPU immediately begins executing the first instruction of the Interrupt Service Routine (ISR) located at the new $\text{CS}:\text{IP}$. |
 
-    Component: OS/Application
 
-# OUT
-## CPU Writing Data to a Peripheral
 
-### Initiation and Readiness Check
+### Phase 4: Returning to the Main Program
 
-1.  Status Read
+The ISR ends with the instruction $\mathbf{\text{IRET}}$ (Interrupt Return).
 
-    The OS executes an $\mathbf{IN}$ instruction to read the peripheral's Status Port address.
+| Action | Doer | Pins Involved | Significance |
+| :--- | :--- | :--- | :--- |
+| EOI Command |ISR (Software) | $\text{I/O Write}$ (to PIC) | The ISR executes a MOV/OUT instruction to write the $\mathbf{EOI}$ command to the PIC, clearing the $\text{ISR}$ bit. |
+| Pop IP | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **POP** operation, restoring the original $\text{IP}$ value from the stack. |
+| Pop CS | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **POP** operation, restoring the original $\text{CS}$ value from the stack. |
+| Pop Flags | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a **POP** operation, restoring the original **Flags Register** (including the original $\text{IF}$ and $\text{TF}$) from the stack. |
+| Resume Execution | CPU | $\text{CS}, \text{IP}$ | Execution resumes at the exact instruction that was interrupted. |
 
-    Component: CPU, Peripheral Controller
+**End of Interrupt (EOI) Command**
 
-2.  Polling/Wait
+The Interrupt Service Routine (ISR) must explicitly tell the 8259A PIC that the interrupt has been fully serviced so the PIC can manage its internal state, clear the In-Service Register (ISR) bit for that interrupt level, and enable lower-priority interrupts.
 
-    The CPU checks the status data to see if the device's $\overline{BUSY}$ flag is clear (meaning the device is ready). If busy, the CPU waits or loops.
+This is done by issuing an End of Interrupt (EOI) command from the CPU to the 8259A PIC.
 
-    Component: CPU
+Without the EOI command, the PIC would be unable to properly process future interrupts.
 
-### Execution
+## Complete NMI Flow
 
-3.  Write Command
+The $\text{NMI}$ flow is much simpler and faster because the key difference is that $\text{NMI}$ requires zero external bus cycles for acknowledge ($\overline{\text{INTA}}$ is not involved), as the vector number (Type 2) is hardwired inside the CPU.
 
-    The CPU executes the $\mathbf{OUT}$ instruction, commanding the transfer of data from the register to the peripheral's Data Port address.
+### Phase 1: Signal Detection (Hardware Level)
 
-    Component: CPU
+| Action | Doer | Pins Involved | Significance |
+| :--- | :--- | :--- | :--- |
+| Physical Event | External Circuitry | $\text{NMI}$ (Pin 17) | An event like a memory parity error or power failure asserts the $\text{NMI}$ pin with a **Low-to-High** transition. |
+| NMI Detection | 8086 CPU | $\text{NMI}$ | The CPU samples the $\text{NMI}$ pin at the end of the current instruction's execution. Unlike $\text{INTR}$, the $\text{NMI}$ signal is **edge-triggered** (L-to-H) and **unaffected** by the $\text{IF}$ flag. |
 
-4.  Address Setup
 
-    The CPU places the $\text{I/O}$ Port address (e.g., $\mathbf{378\text{H}}$) onto the Address Bus.
+### Phase 2: CPU Internal State Save (Non-Bus Cycles)
 
-    Component: CPU
+The CPU immediately prepares to service the Type 2 interrupt without any external negotiation. These steps are fast, internal register transfers and stack adjustments.
 
-5.  Data Setup
+| Action | Doer | Pins/Registers Involved | Significance |
+| :--- | :--- | :--- | :--- |
+| Clear Interrupt Flags | CPU | Internal $\text{IF}$ and $\text{TF}$ | The **Interrupt Flag ($\text{IF}$)** is automatically **cleared ($\text{IF}=0$)** to block subsequent maskable interrupts. The **Trap Flag ($\text{TF}$)** is also **cleared ($\text{TF}=0$)** to disable single-stepping. |
+| Push Flags | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current contents of the **Flags Register** onto the stack. |
+| Push CS | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current **Code Segment ($\text{CS}$)** register onto the stack. |
+| Push IP | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current **Instruction Pointer ($\text{IP}$)** register onto the stack. |
 
-    The CPU places the data byte onto the Data Bus.
 
-    Component: CPU
+### Phase 3: Vector Fetch and Service Jump (Bus Cycles)
 
-6.  Control Signal
+The CPU knows the vector address is fixed at **$8\text{H}$**, so it performs two consecutive **Memory Read** bus cycles to fetch the new $\text{CS}$ and $\text{IP}$ from the Interrupt Vector Table (IVT).
 
-    The CPU asserts the control signals to indicate a write to an I/O location.
+#### **Cycle 1: Fetch New IP (Offset)**
 
-    Component: CPU
+| Action | Doer | Pin Signal | Purpose |
+| :--- | :--- | :--- | :--- |
+| Address Output | CPU | $\mathbf{\text{AD0-AD19}}$ | Outputs the physical address $\mathbf{\text{00008H}}$. |
+| Memory Command | CPU | $\text{M}/\overline{\text{IO}}$ | **HIGH** (Memory operation). |
+| Read Command | CPU | $\mathbf{\overline{\text{RD}}}$ | **LOW** (Asserted) for a Memory Read. |
+| Data Transfer | Memory | $\text{D0-D15}$ | Memory places the $\mathbf{16\text{-bit New } \text{IP}}$ on the data bus. |
+| Register Load | CPU | $\text{IP}$ | The fetched value is loaded into the **$\text{IP}$ register**. |
 
-7.  Peripheral Latch
+#### **Cycle 2: Fetch New CS (Segment)**
 
-    The peripheral's controller detects its address and the $\mathbf{\overline{WR}}$ signal Pin: 29, and reads (latches) the data byte from the Data Bus.
-    
-    Component: Peripheral Controller
+| Action | Doer | Pin Signal | Purpose |
+| :--- | :--- | :--- | :--- |
+| Address Output | CPU | $\mathbf{\text{AD0-AD19}}$ | Outputs the physical address $\mathbf{\text{0000AH}}$ ($00008\text{H} + 2$). |
+| Memory Command | CPU | $\text{M}/\overline{\text{IO}}$ | **HIGH** (Memory operation). |
+| Read Command | CPU | $\mathbf{\overline{\text{RD}}}$ | **LOW** (Asserted) for a Memory Read. |
+| Data Transfer | Memory | $\text{D0-D15}$ | Memory places the $\mathbf{16\text{-bit New } \text{CS}}$ on the data bus. |
+| Register Load | CPU | $\text{CS}$ | The fetched value is loaded into the **$\text{CS}$ register**. |
 
-### Completion
 
-8.  Data Processing
+### Phase 4: Execution and Return
 
-    The peripheral starts executing the command with the new data (e.g., a printer moves the print head and applies ink).
-
-    Component: Peripheral Device
-
-9.  Status Update
-
-    The peripheral changes its status flag (e.g., sets $\text{BUSY}$) to indicate it is now occupied, preparing for the next status check by the CPU.
-
-    Component: Peripheral Controller
+| Action | Doer | Pins/Registers Involved | Significance |
+| :--- | :--- | :--- | :--- |
+| Execute ISR | CPU | $\text{CS}, \text{IP}$ | Execution begins at the first instruction of the Non-Maskable Interrupt Service Routine. |
+| IRET Instruction | CPU (Software) | N/A | The ISR concludes with the $\mathbf{\text{IRET}}$ (Interrupt Return) instruction. |
+| Pop Flags, CS, IP | CPU | $\text{SS}, \text{SP}$ | The $\text{IRET}$ instruction automatically performs three **POP** operations, restoring the original **Flags**, $\mathbf{\text{CS}}$, and $\mathbf{\text{IP}}$ from the stack. |
+| Resume Execution | CPU | $\text{CS}, \text{IP}$ | Execution resumes at the exact instruction that was originally interrupted. |

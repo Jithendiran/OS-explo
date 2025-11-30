@@ -119,24 +119,16 @@ In write flow every thing remains same as read, only the $\text{RD}'$ and $\text
 
 Captured only changed states
 
-### $\mathbf{T1}$: The Address Strobe (Labeling)
-
-| Action | Doer | Pin Signal | Purpose |
-| :--- | :--- | :--- | :--- |
-| $\cdots$ |  $\cdots$ |  $\cdots$ |  $\cdots$ |
-| **Assert $\text{M}/\overline{\text{IO}}$** | CPU | $\text{M}/\overline{\text{IO}}$ (HIGH) | Tells the system this is a **Memory** operation, not I/O. |
-|**Output Data**| CPU | $\text{D0-D15}$ (on $\text{AD}$ lines) | The CPU begins outputting the data it wants to write during $\mathbf{T1}$ (or late T1). |
-| **Latch Address** | External Latch | Input | On the $\text{ALE}$ falling edge, the latch **captures and holds** the address, freeing the $\text{AD}$ lines. The address and BHE is stored in memory circuit |
-
-The CPU continues to drive the data onto the bus for the memory to receive till $T_{3}$
-
 ### $\mathbf{T2}$: The Command and Direction (Ordering)
 | Action | Doer | Pin Signal | Purpose |
 | :--- | :--- | :--- | :--- |
 | Assert $\mathbf{\text{WR}'}$ | CPU | $\text{WR}'$ (LOW) | Sends the Write Command to the memory device, telling it to prepare to accept data.|
+|**Output Data**| CPU | $\text{D0-D15}$ (on $\text{AD}$ lines) | The CPU begins outputting the data it wants to write. |
 | $\cdots$ |  $\cdots$ |  $\cdots$ |  $\cdots$ |
 Assert $\mathbf{\text{DT}/\overline{\text{R}}}$ | CPU |  $\text{DT}/\overline{\text{R}}$ (HIGH, $\text{T}$ state)| Configures the Transceivers to flow data FROM the CPU TO the bus (Transmit).|
 | $\cdots$ |  $\cdots$ |  $\cdots$ |  $\cdots$ |
+
+The CPU continues to drive the data onto the bus for the memory to receive till $T_{3}$
 
 ### $\mathbf{T4}$: Cycle End (Terminating)
 | Action | Doer | Pin Signal | Purpose |

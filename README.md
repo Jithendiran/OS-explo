@@ -20,12 +20,15 @@ To fully engage with the assembly programs and architectural concepts, a basic, 
 
 ### Part I: 8086 Real Mode Foundation (Bare Metal)
 
+[Basic](./Basic.md)
+
 The 8086 phase focused on understanding basic hardware interactions, memory layout, and the simplest form of program control, all within a non-protected, $1\text{ MB}$ memory space.
 
 #### Key Concepts covered
 * Overview
-* Memory/IO/MMIO flow
 * Power On routine
+* Architecture
+* Memory/IO/MMIO/DMA/Interrupt flow
 * Registers
 * Memory management
 * Interrupt Vector Table and custom handler installation
