@@ -22,7 +22,72 @@ The BIU fetches the next instructions while the EU is currently executing the pr
 The 8086 is a 40-pin chip. The pins are generally categorized by their function. Since the 8086 can operate in two different modes—Minimum Mode (for small systems with one processor) and Maximum Mode (for multi-processor systems)—some pins have dual functions.
 
 Here we mostly focus only on Minimum Mode
+
 [Refer](./pin.md)
+
+## Bus
+
+A bus is a set of electrical conductors (wires/pins) used to transmit data between components inside a computer system. The 8086 uses a system bus comprised of three main parts:
+
+1. Address Bus: Used by the CPU (or DMA) to specify the physical memory address or I/O port it wants to read from or write to. The 8086 has a 20-bit address bus (lines $\text{A}_0$ to $\text{A}_{19}$), allowing it to address $2^{20} = 1\text{MB}$ of memory.
+
+2. Data Bus: Used to transfer data between the CPU and memory/I/O devices. The 8086 has a 16-bit data bus (lines $\text{D}_0$ to $\text{D}_{15}$).
+
+3. Control Bus: Used to carry control signals that govern the activities on the system, such as $\text{READ}/\text{WRITE}$ signals, $\text{Ready}$, and $\text{Interrupt}$ signals.
+
+## Bus Control Terminology
+
+| Terminology | Simple Meaning | Doer (Initiator) | Recipient (Target) | Example Statement | Explanation of Roles |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Latch** | To **capture and hold** a changing value (like an address) at a specific moment. | External **Latch Circuit** (e.g., 8282 chip) | Memory or I/O device | "The external latch circuit must **latch** the address during T1." | **Doer:** The Latch circuit physically captures the data. **Recipient:** The captured address is for the Memory chip's use. |
+| **Strobe** | A brief, timed **signal pulse** used to trigger an action (specifically the latching of data/address). | **CPU** (e.g., the $\text{ALE}$ pin) | External Latch Circuit | "The CPU **strobes** the $\text{ALE}$ signal HIGH to indicate the address is ready." | **Doer:** The CPU sends the timing signal. **Recipient:** The Latch circuit receives the signal and performs the latching action. |
+| **Assert** | To **activate** a signal by driving the pin to its active voltage level (usually Low for 8086 control signals). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **asserts** the $\text{RD}'$ signal to start a memory read." | **Doer:** The CPU sets the pin to the active state (LOW). (In this example it is LOW, for some other operations it will be HIGH. It depends on the pins, here activate doesn't mean power up, it means process has to start. Some operation will start on low signal, some on high) **Recipient:** The Memory chip sees the signal and prepares to output data. |
+| **Deassert** | To **deactivate** a signal by driving the pin to its inactive voltage level (usually High). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **deasserts** the $\text{WR}'$ signal to complete the write operation." | **Doer:** The CPU releases the pin back to the inactive state (HIGH). **Recipient:** The Memory chip stops transferring data and saves the value. |
+| **Sample** | To **read (check)** the current logical state (High or Low) of an input signal at a precise moment. | **CPU** | External Device Signal (e.g., $\text{READY}$) | "The CPU **samples** the $\text{READY}$ line near the end of $\text{T3}$." | **Doer:** The CPU performs the internal reading operation. **Recipient:** The $\text{READY}$ signal from the external device provides the information. |
+| **Drive** | To actively **apply a voltage** (High or Low) to a bus line, essentially "putting data or address onto the bus." | **CPU** or **Memory/I/O** | The Bus (Data or Address) | "The Memory chip **drives** the requested data onto the Data Bus." | **Doer:** The Memory chip actively places the electrical signals on the bus wires. **Recipient:** The CPU is the ultimate recipient, waiting to read the data from the bus. |
+
+##  Bus Cycles, T-States, READY Signal and WAIT States
+
+In the 8086 microprocessor, all external communications (like reading an instruction, reading data from memory, or writing data to an I/O port) are organized into **Bus Cycles** (also called **Machine Cycles**).
+
+A Bus Cycle is a complete sequence of events for a single bus operation. It has 4 T-state
+
+### T-State Definition
+A **T-State** (or **Clock State**) is the most basic unit of time in the 8086 timing. It is equal to one period of the system clock ($T_{CLK}$).
+
+### The Standard Bus Cycle (Minimum of 4 T-States)
+Every standard 8086 bus cycle (Read, Write, I/O Read, I/O Write, etc.) is composed of a minimum of **four T-states**, designated as $\mathbf{T1, T2, T3}$, and $\mathbf{T4}$.
+
+| T-State | Primary Action | Purpose |
+| :--- | :--- | :--- |
+| **T1** | **Address Out** | The 8086 places the 20-bit memory address or 16-bit I/O address onto the multiplexed Address/Data Bus (A/D lines). The **ALE** (Address Latch Enable) signal is active high during this state to allow external latches to capture the address. |
+| **T2** | **Set up Control Signals** | The 8086 removes the address and asserts the control signals (like $\text{RD}'$ or $\text{WR}'$, $\text{DEN}'$, $\text{DT}/\text{R}'$) to specify the type and direction of the operation (e.g., Read from Memory). |
+| **T3** | **Data Transfer Window** | This is the main period where the addressed device (memory or I/O) is expected to respond. The device puts data onto the Data Bus (for a Read) or holds the written data on the bus (for a Write). **The READY signal is sampled near the end of T3.** |
+| **T4** | **Data Latch/Cleanup** | The 8086 completes the operation. For a Read, the CPU **latches (reads) the data** from the bus. For a Write, the CPU stops driving the $\text{WR}'$ signal, ending the write operation. All bus signals are typically deactivated. |
+
+
+### READY Signal and WAIT States
+
+The four T-states ($\text{T1-T4}$) assume the external memory or I/O device is fast enough to complete the data transfer within the allotted time. However, slower devices exist.
+
+### The READY Signal
+The **READY** pin is an input to the 8086 that synchronizes the CPU with slower external hardware.
+
+* **READY = HIGH (1):** The device is **ready**; it has completed the data transfer (e.g., the data is stable on the bus for a Read). The CPU proceeds to the next state ($\text{T4}$).
+* **READY = LOW (0):** The device is **not ready**; it needs more time to complete the operation.
+
+### WAIT States ($\mathbf{T_W}$)
+A **WAIT State** ($\mathbf{T_W}$) is an **extra clock period** (or T-state) that the 8086 inserts between $\text{T3}$ and $\text{T4}$ of the bus cycle.
+
+* **Function:** If the external device pulls the **READY** pin **LOW** (0) when the 8086 samples it (near the end of $\text{T2}$ and during $\text{T3}$), the 8086 will insert a $\text{TW}$ state instead of proceeding to $\text{T4}$.
+* **CPU Action:** During a WAIT state, the CPU is momentarily **idle** (stalled) on the bus, but it continues to assert the control signals and maintain the bus state, giving the slow device more time.
+* **Duration:** The 8086 will insert **consecutive $\mathbf{T_W}$ states** until the device sets the **READY** pin **HIGH** again, at which point the CPU immediately proceeds to $\text{T4}$ and finishes the cycle.
+
+$$\text{Bus Cycle } = T_{CLK} \times (4 + T_W)$$
+
+[Memory Flow](./memory-Flow.md)
+
+
 ---
 
 The 8086 microprocessor's architecture is built around segmentation, a collection of 16-bit registers for various purposes, and a 16-bit Flag register to reflect the CPU's status and control operations. It has $1\text{ MB RAM}$, 20 bit address bus
@@ -339,22 +404,81 @@ TF ($\text{Trap Flag}$) and $\text{INT 3}$ are both mechanisms used on the x86 a
 * Explicit instruction inserted into the code by a debugger or programmer. Sets a Software Breakpoint, Execution proceeds normally until the instruction is hit.
 * Explicitly triggers the Breakpoint Exception (Interrupt Vector $\text{3}$) when the instruction is executed.
 
-## DMA (Direct Memory Access)
+## Device communication
 
-DMA is a mechanism that allows certain hardware subsystems (like a disk drive controller) to access system memory directly, without requiring the CPU to constantly manage the transfer.
+### 1. Interrupt IO
 
-* It speeds up memory operations, especially for bulk data transfers, by freeing up the CPU to perform other tasks.
-* The 8086 provides control signals like $\text{HOLD}$ and $\text{HLDA}$ (Hold Acknowledge) that allow the CPU to temporarily stop control of the system buses to the DMA controller.
+When a device want to notify cpu, it will raise a interrupt (eg:,.Keyboard)
 
-## Bus
+### 2. I/O Port Access (Port-Mapped I/O)
 
-A bus is a set of parallel electrical conductors (wires) used to transmit data between components inside a computer system. The 8086 uses a system bus comprised of three main parts:
+This is a method where the CPU communicates with a device's registers (control, status, or data) using a dedicated, separate address space called the I/O space. This is the classic method used by many legacy devices in the x86 architecture (like the PIC, PIT, and old Serial/Parallel ports).
 
-1. Address Bus: Used by the CPU (or DMA) to specify the physical memory address or I/O port it wants to read from or write to. The 8086 has a 20-bit address bus (lines $\text{A}_0$ to $\text{A}_{19}$), allowing it to address $2^{20} = 1\text{MB}$ of memory.
+* Mechanism: The CPU uses special, dedicated instructions
+    - OUT (to write data to an I/O port)
+    - IN (to read data from an I/O port)
+* Address Space: The I/O space is physically separate from the main memory space. The x86 architecture supports $2^{16} = 65,536$ I/O ports, addressed by 16 bits (from $0x0000$ to $0xFFFF$). I/O address space are not actual memory cells, but logical addresses that the CPU uses to point to a specific register on an I/O device.
+* CPU Action: When the CPU executes an IN or OUT instruction, it asserts a special control line (like the $M/\overline{IO}$ pin on the 8086), telling the bus system that the address on the address bus refers to an I/O port, not a memory location.The Motherboard's I/O Controller has the 1 byte of storage, from where cpu reads
+* Pros: Keeps memory and I/O logic separate; simplifies address decoding for I/O devices.
+* Cons: Requires special instructions; access is slower than memory access and often more limited in flexibility.
 
-2. Data Bus: Used to transfer data between the CPU and memory/I/O devices. The 8086 has a 16-bit data bus (lines $\text{D}_0$ to $\text{D}_{15}$).
+Physical Device: when doing reading/writing we are doing operation on register or buffer located inside a specialized I/O Controller chip (like the $\mathbf{8259A\ PIC}$, the $\mathbf{8253\ Timer}$, or the $\mathbf{Keyboard\ Controller}$).
 
-3. Control Bus: Used to carry control signals that govern the activities on the system, such as $\text{READ}/\text{WRITE}$ signals, $\text{Ready}$, and $\text{Interrupt}$ signals.
+### Memory-Mapped I/O (MMIO)
+This is a method where the registers of a peripheral device are mapped into the CPU's main memory address space. The CPU treats these device registers exactly as if they were RAM
+
+* Mechanism: The CPU uses standard memory access instructions:
+    - MOV (to read or write)
+    - Any other instruction that accesses a memory location.
+* Address Space: I/O device registers are assigned a unique, reserved range of physical memory addresses (e.g., the VGA Framebuffer is often at $0xA0000$ or higher). This range is marked as non-RAM.
+* CPU Action: When the CPU executes a standard MOV instruction to a MMIO address, the bus system (or chipset) intercepts the request. Instead of routing the read/write operation to RAM chips, it routes the signal to the peripheral device that is listening for that specific address range.
+So the RAM address are just a place holder, if we write or read on that location means we are not doing from RAM, actualling doing it on the device registers or storage
+* Pros: Unified programming model (use all standard memory instructions); easier for compilers; generally faster access than I/O Ports
+* Cons: Consumes a portion of the limited physical memory address space (less of an issue on 32-bit and 64-bit systems); requires careful handling (e.g., disabling caching) to ensure reads/writes hit the device registers immediately. Storage cells in these are not usable
+
+Physical device: when doing reading/writing we are doing operation on specialized buffer (like $\mathbf{Video\ RAM\ (VRAM)}$) or a $\mathbf{ROM\ (Read-Only\ Memory)}$ chip. The data (comes from/ goes to) the memory contained within those specific chips.
+
+When you $\mathbf{MOV\ AL, [B8000\text{H}]}$ (accessing text mode video memory), you are reading from the VRAM chip on the graphics card, not the main system DRAM/SRAM chips.
+
+### Direct Memory Access (DMA)
+DMA is a hardware mechanism that allows a peripheral device to read data from or write data to main memory directly, without involving the CPU in the actual data transfer process.
+* Purpose: To offload high-volume, high-speed data transfers (like disk or network traffic) from the CPU, significantly improving system throughput and efficiency.
+* Key Component: The DMA Controller (DMAC). This is a dedicated chip (like the 8237 in legacy systems) or built-in logic in modern chipsets/devices that orchestrates the transfer.
+* CPU Involvement: Only for the initial setup and handling the final completion interrupt. When DMA complete it's work CPU will be notified
+
+When DMA is doing the working, it is going to take complete control over the system bus so CPU has to be idel, Then what make DMA powerfull is CPU mov from disk max of 2 bytes, but DMA can handle in KB
+
+When the DMA controller needs to transfer data, it must gain control of the system buses. The DMA controller doesn't necessarily take control of all CPU registers (like $AX, BX, CX,$ etc.); it takes control of the essential pathways:
+
+* Address Bus: Used to specify the memory location.(Pins $\text{A0}$ through $\text{A19}$)
+* Data Bus: Used to transfer the actual data. (Pins $\text{D0}$ through $\text{D7}$ or $\text{D15}$)
+* Control Bus: Used to manage read/write operations. (Pins like $\text{RD}'$ (Read) and $\text{WR}'$ (Write))
+
+During this period (while the DMA is using the bus), the CPU cannot access memory or I/O ports. Consequence: Since instruction fetching and execution heavily rely on accessing memory, the CPU is effectively IDLE (stalled/halted) and cannot run any part of the program.
+
+While the CPU is idled by the DMA controller taking the buses, it is only paused from executing instructions that require bus access. The CPU itself is still powered on and internally active.
+
+- Internal Operations: The CPU can still perform internal operations that do not require the bus. This includes things like:
+- Simple register-to-register operations (e.g., $MOV AX, BX$).
+- Arithmetic/Logical Operations on data currently held in its internal registers (e.g., $ADD AX, 10H$).
+- Instruction Pre-fetch Queue: The 8086 has a 6-byte instruction pre-fetch queue. If the queue is full and the transfer is short, the CPU can continue executing instructions from its queue for a brief moment until it needs to fetch a new instruction from memory.
+
+* Flow:
+
+    1. Setup: The CPU (running the OS/driver) programs the DMAC and the peripheral device with:
+
+        - The source (e.g., the disk's buffer or memory).
+
+        - The destination (a buffer address in main memory).
+
+        - The size (number of bytes to transfer).
+
+    2. Request: The Peripheral Device sends a DMA Request (DRQ) signal to the DMAC.
+
+    3. Transfer: The DMAC requests the Bus from the CPU using a Hold Request (HRQ). The CPU grants access (Hold Acknowledge - HLDA). The DMAC then becomes the temporary "bus master" and manages the transfer of the data block directly between the device and memory.
+
+    4. Completion: Once the block is transferred, the DMAC releases the bus and sends an Interrupt to the CPU.
+
 
 ## Boot device/disk
 

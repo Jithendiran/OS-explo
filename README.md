@@ -23,6 +23,8 @@ To fully engage with the assembly programs and architectural concepts, a basic, 
 The 8086 phase focused on understanding basic hardware interactions, memory layout, and the simplest form of program control, all within a non-protected, $1\text{ MB}$ memory space.
 
 #### Key Concepts covered
+* Overview
+* Memory/IO/MMIO flow
 * Power On routine
 * Registers
 * Memory management
@@ -30,3 +32,8 @@ The 8086 phase focused on understanding basic hardware interactions, memory layo
 
 [Click for 8086 high level docs](./8086/README.md)
 
+
+
+## Acknowledgements
+
+The high-level concepts, architectural overviews, and foundational explanations throughout this documentation—especially within the "Key Concepts Covered" sections—were significantly developed and clarified through interactive conversations with Gemini (Flash 2.5). Specific details and code implementations were also verified against and supplemented by various external websites and technical books, ensuring accuracy.
