@@ -32,17 +32,21 @@ BIOS code is written on a dedicated ROM chip on motherboard, on startup these co
 
 The classic PC memory map is divided into two major regions: **Conventional Memory** (RAM below 640 KB) and the **Upper Memory Area** (UMA, or System Reserved Memory) between 640 KB and 1 MB.
 
-| Address Range (Hex) | Size | Component/Usage | Details |
-| :--- | :--- | :--- | :--- |
-| **00000H – 003FFH** | 1 KB | **Interrupt Vector Table (IVT)** | Contains 256 interrupt vectors (4 bytes each). The BIOS initializes these with pointers to default interrupt handler routines (BIOS functions). |
-| **00400H – 004FFH** | 256 Bytes | **BIOS Data Area (BDA)** | Contains system variables used by the BIOS and DOS, such as equipment list, base addresses of I/O devices (serial, parallel), keyboard buffer, and timer counts. |
-| **00500H – 005FFH** | 256 Bytes | **DOS/User Data Area** | Reserved for operating system use (e.g., DOS), often called the Extended BIOS Data Area (EBDA) if expanded by the BIOS. |
-| **00600H – 9FFFFH** | $\approx$ 639 KB | **Conventional RAM** | The main memory area for the operating system, applications, and data. The BIOS tests and counts all available RAM up to this point (or $640 \text{KB}$ boundary). |
-| **A0000H – BFFFFH** | 128 KB | **Video RAM (VRAM)** | Dedicated memory used by the video card. $ \text{A0000H}-\text{AFFFFH}$ is for graphics modes; $ \text{B0000H}-\text{B7FFFH}$ is for monochrome text; $\text{B8000H}-\text{BFFFFH}$ is for color text. |
-| **C0000H – C7FFFH** | 32 KB | **Video BIOS ROM** | Contains the firmware for the video adapter (VGA/EGA/etc.). The main BIOS executes this code during POST to initialize the display. |
-| **C8000H – DFFFFH** | 96 KB | **Option ROMs** | Reserved for other **hardware expansion cards** (e.g., network cards, SCSI/RAID controllers, specialized disk controllers) that contain their own BIOS code for initialization and boot support. |
-| **E0000H – EFFFFH** | 64 KB | **Unused/Reserved** | Often unused or reserved for the main BIOS code/data areas, particularly in modern systems using **Shadow RAM** (where the BIOS is copied from ROM to this RAM range for faster execution). |
-| **F0000H – FFFFFH** | 64 KB | **System BIOS ROM** | This is where the core **BIOS firmware** resides. The initial code executed from $\text{FFFF0H}$ is physically located here. If shadowing is enabled, this range is mapped to RAM for execution speed. |
+$$2^{20}== 1\text{ MB} == 0 - 1048575\text{ Bytes} == 0x00000 - 0xFFFFF$$
+
+| Address Range (Hex) | Size | Bytes Range | Component/Usage | Details |
+| :--- | :--- | :--- | :--- | :--- |
+| **00000H – 003FFH** | 1 KB | 0-1023 | **Interrupt Vector Table (IVT)** | Contains 256 interrupt vectors (4 bytes each). The BIOS initializes these with pointers to default interrupt handler routines (BIOS functions). |
+| **00400H – 004FFH** | 256 Bytes | 1024 - 1279 | **BIOS Data Area (BDA)** | Contains system variables used by the BIOS and DOS, such as equipment list, base addresses of I/O devices (serial, parallel), keyboard buffer, and timer counts. |
+| **00500H – 005FFH** | 256 Bytes | 1280 - 1535 | **Extended BIOS Data Area (EBDA)** | Reserved for the Extended BIOS Data Area (EBDA) if expanded by the BIOS. This is depends on the hardware, it may be consider as **Conventional RAM** |
+|--|--|--|**Lower region**|--|
+| **00600H – 9FFFFH** | $\approx$ 639 KB | 1536 - 655359 | **Conventional RAM** | The main memory area for the operating system, applications, and data. The BIOS tests and counts all available RAM up to this point (or $640 \text{KB}$ boundary). |
+|--|--|--|**Upper region**|--|
+| **A0000H – BFFFFH** | 128 KB | 655360 - 786431  | **Video RAM (VRAM)** | Dedicated memory used by the video card. $ \text{A0000H}-\text{AFFFFH}$ is for graphics modes; $ \text{B0000H}-\text{B7FFFH}$ is for monochrome text; $\text{B8000H}-\text{BFFFFH}$ is for color text. |
+| **C0000H – C7FFFH** | 32 KB | 786432 - 819199 | **Video BIOS ROM** | Contains the firmware for the video adapter (VGA/EGA/etc.). The main BIOS executes this code during POST to initialize the display. |
+| **C8000H – DFFFFH** | 96 KB | 819200 - 917503 | **Option ROMs** | Reserved for other **hardware expansion cards** (e.g., network cards, SCSI/RAID controllers, specialized disk controllers) that contain their own BIOS code for initialization and boot support. |
+| **E0000H – EFFFFH** | 64 KB | 917504 - 983039  | **Unused/Reserved** | Often unused or reserved for the main BIOS code/data areas, particularly in modern systems using **Shadow RAM** (where the BIOS is copied from ROM to this RAM range for faster execution). |
+| **F0000H – FFFFFH** | 64 KB | 983040 - 1048575 | **System BIOS ROM** | This is where the core **BIOS firmware** resides. The initial code executed from $\text{FFFF0H}$ is physically located here. If shadowing is enabled, this range is mapped to RAM for execution speed. |
 
 4. Search for Boot Device: The BIOS consults its configuration (stored in CMOS) to determine the boot order (e.g., Floppy, Hard Disk, CD-ROM). It then attempts to read the first sector of the first bootable device.
 

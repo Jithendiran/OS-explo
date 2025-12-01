@@ -99,6 +99,18 @@ ji@ji-MS-7E26:~$ ls -la /tmp/bo*
 
 ### 4. CALL and INT
 
+**How stack grows?**
+
+As we know stack always grow in down wards, if stack start `ss:sp` = `0x0000:0xffff`, it's linear address is `0x0ffff == 0xffff`, if it grow by 2 bytes next address is `0xffff - 2 = 0xfffd`
+
+Here the sequence of stack address for 2 bytes growth
+
+$$\text{0xffff} \rightarrow \text{0xfffd} \rightarrow \text{0xfffb} \rightarrow \text{0xfff9} \rightarrow \text{0xfff7} \rightarrow \text{0xfff5} \rightarrow \text{0xfff3} \rightarrow \cdots $$
+
+> [!TIP] 
+> specia; gdb functions are defined for this program, execute like thi ` gdb -x ./4/gdb_helper.gdb` and give `continue`
+
+
 * The $\text{CALL}/\text{RET}$ Flow (Subroutine)
   - A standard $\text{CALL}$ only pushes $\text{CS}:\text{IP}$ onto the stack. The $\text{RET}$ only restores $\text{CS}:\text{IP}$.
   - Stack: $\text{CALL}$ pushes 4 bytes ($\text{CS}$ and $\text{IP}$). $\text{RET}$ pops 4 bytes.
@@ -121,7 +133,6 @@ Keyboad's hardcoded interrupt is `Type 0x09`, we will be writing a small custom 
 
 IVT is 4 bytes, 1st two bytes have offset and second 2 bytes will have the segment
 
-[Read](../InOut.md)
 
 `in` command to fetch from address
 
@@ -135,25 +146,50 @@ Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI
 [Program](./custom_iv.asm)
 
 ### 6. User Process, Stack Switching and Exit
-   do maual stack switch
 
-   You must update both $\text{SS}$ and $\text{SP}$ atomically. If you change $\text{SS}$ and an interrupt occurs before you change $\text{SP}$, the interrupt will use the new $\text{SS}$ with the old $\text{SP}$, causing a crash (stack overflow/underflow). You must disable interrupts before changing $\text{SS}$ and $\text{SP}$.
+#### Memory plan
+
+| Hex Address Range | Decimal Address Range | Size | Note |
+| :--- | :--- | :--- | :--- |
+| 00600 – 22FFC | 1536 – 143356 | $\approx 138.5\text{KB}$ | Kernel Code |
+| 22FFD – 54FFD | 143357 – 347133 | $\approx 200\text{KB}$ | Kernel Stack |
+| 54FFE – 6DFFE | 347134 – 449534 | $\approx 100\text{KB}$ | User Code |
+| 6DFFF – 9FFFF | 449535 – 655359 | $\approx 200\text{KB}$ | User Stack |
 
 
-   Idea is to mimic kernel and user process
+#### program plan
 
-   why are we using int 0x80, iret over call and ret?
-   we can achieve the same result by using using call and return
-   idea is to when we are handling the kernel code it has to disable the interrupts, it has to focus only on kernel part of code
+The system's operation is divided into three main stages: **Boot, Kernel Initialization, and Application Run**.
 
-   call, ret vs int, iret
-   same program  
-   
-   `int 0x80` is available for user, when interrupt `0x80` is hitted based on the `ah` value perform the action
+##### 1. Boot and Kernel Startup
 
-   if ah == 0x01 print
+The process begins when the computer is turned on:
 
-   if ah == 0x02 exit
+* The **Boot Loader** (a tiny program in the first disk sector) will load the **Kernel Code** into memory starting at the address **$0x00600$**.
+* The Boot Loader then immediately transfers control (jumps) to the Kernel Code to start the operating system.
+* Once running, the Kernel Code first sets up its own dedicated **Kernel Stack**.
+* Next, the Kernel Code loads the **User Program** (application) into memory, starting at address **$0x54\text{FFE}$** .
+* Finally, the kernel prepares a separate **User Stack** for the application.
+
+##### 2. Application Run and System Calls
+
+The kernel hands over control to the User Program, which runs on its own User Stack. When the application needs to perform a task the hardware or OS controls (like printing to the screen or quitting):
+
+* The User Program makes a **System Call** by triggering the **$x80$ interrupt**.
+* The CPU stops the User Program and immediately jumps to the **Kernel's Interrupt Handler** to process the request.
+* The Kernel reads the **$\text{AH}$ register** to figure out which service the User Program needs.
+
+##### 3. Service Execution
+
+The kernel's $x80$ interrupt handler performs the requested service:
+
+| Service ID ($\text{AH}$) | Service Name | Input | Action |
+| :--- | :--- | :--- | :--- |
+| **$0x01$** | **Print** | The **$\text{DX}:\text{SI}$** registers contain the **memory address** of the text string to be printed. | The kernel prints the text string until it sees a null character (the end-of-string marker). |
+| **$0x02$** | **Exit** | The **$\text{BH}$** register contains the program's **Exit Code** ($\mathbf{00}$ for success, $\mathbf{01}$ for failure). | The kernel terminates the User Program and reports the exit code back to the system (in this case, likely halting the CPU). |
+
+Once a service is complete (except for Exit), the kernel returns control to the User Program so it can continue running.
+
 
    `nasm -f bin 5/loader.asm -o /tmp/boot1.bin`
 
@@ -164,11 +200,11 @@ Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI
    `qemu-system-i386 -fda /tmp/boot.img -nographic`
 
 ### 7. Basic PIC Setup
-        
 
-        * memory mapping
-### 8. I/O Port Access
-        * Key Concept: Memory-Mapped vs. Port I/O
+
+### 8. Direct Video Memory Access (MMIO)
+
+
 ### 9. Simple Timer Interrupt
         switch between 2 tasks
         use 2 c programs

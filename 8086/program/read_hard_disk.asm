@@ -58,7 +58,7 @@ start:
 
 ; --- Subroutine to Print String (Reusing code from Simple Print) ---
 print_string:
-    pusha                ; Save general purpose registers
+    pusha                ; Save general purpose registers (ax, bx, cx, dx, bp, dp, si, di)
 
 .print_loop:
     mov al, [si]         
