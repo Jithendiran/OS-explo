@@ -31,6 +31,7 @@ The 8086 phase focused on understanding basic hardware interactions, memory layo
 * Memory/IO/MMIO/DMA/Interrupt flow
 * Registers
 * Memory management
+* code segment, stack segment switching between process
 * Interrupt Vector Table and custom handler installation
 
 [Click for 8086 high level docs](./8086/README.md)

@@ -11,6 +11,7 @@ nop
 
 ; --- Code ---
 main:
+    cli
     ; Initialize Segments (DS = ES = 0x07C0)
     mov ax, cs
     mov ds, ax

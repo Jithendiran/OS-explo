@@ -8,6 +8,8 @@ ORG 0x0000 ; Assembly offset within the 0x00600 segment
 
 
 start:
+    sti
+
     mov ax, cs
     mov ds, ax
     mov es, ax
@@ -16,6 +18,13 @@ start:
     mov ax, KERNEL_STACK_SEGMENT
     mov ss, ax
     mov sp, KERNEL_STACK_POINTER
+
+    ; set tf and if
+    pushf      ; 1. Push current FLAGS register onto the stack
+    pop ax     ; 2. Pop FLAGS into the AX register
+    or ax, 0x0300  ; 3. Use OR to set both bits (0x0200 | 0x0100 = 0x0300)
+    push ax    ; 4. Push the modified value back onto the stack
+    popf       ; 5. Pop the modified value into the FLAGS register
     
     mov ax, 0x0000
     mov es, ax
@@ -41,23 +50,45 @@ start:
 
     ;----------------------------------User prepare
     ; setup code and stack segment for user
-    pusha
-    mov [Kernel_sp_save], sp
+    push 'JJ'
 
+    mov [Kernel_sp_save], sp
+    int 0x3  ;
+    ;-------------------change segments
     mov ax, USER_CODE_SEGMENT
     mov ds, ax
     mov es, ax
     mov bx, ax
-
+    ;-------------------stack switch
     mov ax, USER_STACK_SEGMENT
     mov ss, ax
     mov sp, USER_STACK_POINTER
-    call USER_CODE_SEGMENT:USER_CODE_OFFSET 
+    ;-------------------User program call
+    call USER_CODE_SEGMENT:USER_CODE_OFFSET  ; need to change to long jump, bcz kernel address may store in user stack
 
+    ;-----------------------------------Kernel restore
+
+    ;--------------------stack switch
+    
     mov ax, KERNEL_STACK_SEGMENT
     mov ss, ax 
     mov sp, [Kernel_sp_save]
-    popa
+    int 0x3  ;
+    ;---------------------get segments from kernel stack
+    mov al, '-'
+    mov ah, 0x0E    ; AH=0Eh: Teletype output
+    int 0x10  
+
+    pop ax
+    pop ax
+    mov ah, 0x0E    ; AH=0Eh: Teletype output
+    int 0x10  
+
+    mov ax, KERNEL_CODE_SEGMENT
+    mov ds, ax
+    
+    mov si, kernel_done
+    call KERNEL_CODE_SEGMENT:print_k
     
     jmp $
 
@@ -89,30 +120,13 @@ int_x80_handler:
     push di
     push bp
 
-    
-    ;cmp ah, 0x01
     je service_print
-    
-    ; cmp ah, 0x02
-    ; je service_exit
-    
-    jmp service_unknown ; Fall through for unknown service
-
+     
 service_print:
     ; Print string from DS:SI till null (using BIOS INT 10h for simplicity)
     call KERNEL_CODE_SEGMENT:print_k
     jmp int_x80_exit ; Finished service, exit interrupt
 
-
-service_exit:
-    mov si, kernel_done
-    call KERNEL_CODE_SEGMENT:print_k
-    hlt              ; Halt the CPU 
-
-service_unknown:
-    mov si, unknown_service
-    call KERNEL_CODE_SEGMENT:print_k
-    ; Fall-through to exit
 
 int_x80_exit:
     ; Restore registers and return from interrupt
@@ -126,11 +140,10 @@ int_x80_exit:
     iret ; Return from interrupt  
 
 ; --- Data ---
-kernel_done db 'Exiting!', 0x0D, 0x0A, 0
+kernel_done:
+ db 'Kernel restored!', 0x0D, 0x0A, 0
 kernel_msg:
     db 'In  Kernel!', 0x0D, 0x0A, 0
-unknown_service :
-    db 'Unknown service!!!!', 0x0D, 0x0A, 0
 MESSAGE_FAIL:
     db 'Disk Read FAILED!\n', 0x0D, 0x0A, 0
 Kernel_sp_save:
