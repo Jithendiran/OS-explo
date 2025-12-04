@@ -36,9 +36,13 @@ main:
     
     jc disk_error
 
-    mov si, load_msg
-    call print_string
+    ;mov si, load_msg
+    ;call print_string
 
+    mov al, 'a'
+    mov ah, 0x0E
+    int 0x10
+    ; (b, check screen)0x00007c42 -> 0x0000d29a (may be print) -> (b, check screen) 0x7c43 -> 0x00007c39 -> 0x00007c3a,... don't know where it went
     jmp KERNEL_CODE_SEGMENT:0x0000 ; Jump to kernel entry point
     hlt
 
@@ -65,3 +69,7 @@ load_msg db 'In  Loader!',  0x0D, 0x0A, 0
 ; --- Padding and Magic Number ---
 times 510 - ($ - $$) db 0
 dw 0xAA55
+
+; ndisasm -o 0x7c00 /tmp/load.img
+; b *0x7C25 ; check `a` printed or not, check next inst 00007C27 or 0x7c33
+; if 0x7c33 error
