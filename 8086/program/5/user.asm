@@ -11,9 +11,14 @@ start:
     mov ds, ax
     mov cx, ax
 
-    mov ah, 0x01
-    mov si, hello_message ; SI = Offset of the message
-    int 0x80 ; Execute system call
+    mov al, 'c'
+    mov bh, 0x00
+    mov ah, 0x0E
+    int 0x10
+
+    ;mov ah, 0x01
+    ;mov si, hello_message ; SI = Offset of the message
+    ;int 0x80 ; Execute system call
 
     retf
 
