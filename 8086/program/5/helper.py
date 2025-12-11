@@ -84,10 +84,10 @@ class Dashboard16(gdb.Command):
         kernel_stack_base = int(0x22FFD)
         kernel_stack_top_lin = int(0x54FFD)
 
-        user_stack_ss   = int(0x6DFF)
+        user_stack_ss   = int(0x9FFF)
         user_stack_top  = int(0x000F)
-        user_stack_base = int(0x9FFFF)
-        user_stack_top_lin = int(0x6DFFF)
+        user_stack_base = int(0x6DFFF)
+        user_stack_top_lin = int(0x9FFFF)
 
         kernel_sp = 0
         user_sp = 0
@@ -95,7 +95,8 @@ class Dashboard16(gdb.Command):
         def __init__(self):
             c_ss = gdb.parse_and_eval("$ss")
             c_esp = gdb.parse_and_eval("$esp")
-            c_linear = c_ss * 16 + c_esp
+            c_linear = int(c_ss * 16 + c_esp)
+            
 
             if my_persistent_data["kernel_sttop"] == 0:
                 my_persistent_data["kernel_sttop"] = Dashboard16.stack.kernel_stack_top_lin
@@ -115,9 +116,6 @@ class Dashboard16(gdb.Command):
 
         def get_stack_data(self, address, bytes_to_read, stack_data):
             """Reads stack values from top (SS:SP) to base."""
-            # Calculate how many words to read (limit to 10 or until base)
-            # 8086 stack grows downwards, so base > linear_addr
-            bytes_to_read = bytes_to_read * 2 # 2 for each stack content
 
             try:
                 inferior = gdb.selected_inferior()
@@ -134,8 +132,9 @@ class Dashboard16(gdb.Command):
 
         def kernel_stack(self, data_toread):
             stack_data = []
-            # if 10 data we need to read 
-            startaddr = my_persistent_data["kernel_sttop"] - (data_toread * 2)
+            startaddr = my_persistent_data["kernel_sttop"]
+            stopaddr = Dashboard16.stack.kernel_stack_top_lin
+            data_toread = min(data_toread, stopaddr-startaddr)
             self.get_stack_data(startaddr, data_toread, stack_data)
 
             for kernel_set in stack_data:
@@ -143,8 +142,9 @@ class Dashboard16(gdb.Command):
         
         def user_stack(self, data_toread):
             stack_data = []
-            # if 10 data we need to read 
-            startaddr = my_persistent_data["user_sttop"] - (data_toread * 2)
+            startaddr = my_persistent_data["user_sttop"]
+            stopaddr = Dashboard16.stack.user_stack_top_lin
+            data_toread = min(data_toread, stopaddr-startaddr)
             self.get_stack_data(startaddr, data_toread, stack_data)
 
             for kernel_set in stack_data:
@@ -154,19 +154,21 @@ class Dashboard16(gdb.Command):
         def print_16(self):
             c_ss = gdb.parse_and_eval("$ss")
             c_esp = gdb.parse_and_eval("$esp")
-            c_linear = c_ss * 16 + c_esp
-            gdb.write(f"Current stack : {hex(c_ss)} : {hex(c_esp)} -> {c_linear} ")
+            c_linear = int(c_ss * 16 + c_esp)
+            gdb.write(f"Current stack : {hex(c_ss)} : {hex(c_esp)} -> {hex(c_linear)}\n")
+            gdb.write(f"Kernel  stack : {hex(my_persistent_data['kernel_sttop'])}\n")
+            gdb.write(f"User stack : {hex(my_persistent_data['user_sttop'])}\n")
         
             gdb.write("\n┌────────────────── STACK VIEW ──────────────────┐\n")
             gdb.write(  "│ [Kernel Stack]                                 │\n")
-            
-            self.kernel_stack(10)
+            if my_persistent_data["kernel_sttop"] < Dashboard16.stack.kernel_stack_top_lin:
+                self.kernel_stack(10)
             
             gdb.write(  "├────────────────────────────────────────────────┤\n")
             
             gdb.write(  "│ [User Stack]                                   │\n")
-            
-            self.user_stack(10)
+            if my_persistent_data["user_sttop"] < Dashboard16.stack.user_stack_top_lin:
+                self.user_stack(10)
 
             gdb.write(  "└────────────────────────────────────────────────┘\n")
 
@@ -182,18 +184,20 @@ class Dashboard16(gdb.Command):
             eip = hex(gdb.parse_and_eval("$eip"))
             di = hex(gdb.parse_and_eval("$di"))
             si = hex(gdb.parse_and_eval("$si"))
+            ef = hex(gdb.parse_and_eval("$eflags"))
 
             gdb.write("\n┌────────────────── REG VIEW ──────────────────┐\n")
-            gdb.write( f"| AX  : {ax:<39}|\n")
-            gdb.write( f"| BX  : {bx:<39}|\n")
-            gdb.write( f"| CX  : {cx:<39}|\n")
-            gdb.write( f"| DX  : {dx:<39}|\n")
-            gdb.write( f"| SS  : {ss:<39}|\n")
-            gdb.write( f"| ESP : {esp:<39}|\n")
-            gdb.write( f"| CS  : {cs:<39}|\n")
-            gdb.write( f"| EIP : {eip:<39}|\n")
-            gdb.write( f"| DI  : {di:<39}|\n")
-            gdb.write( f"| SI  : {si:<39}|\n")
+            gdb.write( f"│ AX      : {ax:<35}│\n")
+            gdb.write( f"│ BX      : {bx:<35}│\n")
+            gdb.write( f"│ CX      : {cx:<35}│\n")
+            gdb.write( f"│ DX      : {dx:<35}│\n")
+            gdb.write( f"│ SS      : {ss:<35}│\n")
+            gdb.write( f"│ ESP     : {esp:<35}│\n")
+            gdb.write( f"│ CS      : {cs:<35}│\n")
+            gdb.write( f"│ EIP     : {eip:<35}│\n")
+            gdb.write( f"│ DI      : {di:<35}│\n")
+            gdb.write( f"│ SI      : {si:<35}│\n")
+            gdb.write( f"│ EFLAGS  : {ef:<35}│\n")
             gdb.write(  "└──────────────────────────────────────────────┘\n")
 
     def run():
@@ -223,6 +227,3 @@ def stop_handler(event):
 
 # Register the handler with GDB's event system
 gdb.events.stop.connect(stop_handler)
-
-
-# to do show stack inserted data not remaning data    from top old to current top
