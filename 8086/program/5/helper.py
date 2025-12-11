@@ -138,7 +138,7 @@ class Dashboard16(gdb.Command):
             self.get_stack_data(startaddr, data_toread, stack_data)
 
             for kernel_set in stack_data:
-                gdb.write(f"│ {kernel_set['addr']}: {kernel_set['val']:<37} │\n")
+                gdb.write(f"│ {kernel_set['addr']}: {kernel_set['val']:<34} │\n")
         
         def user_stack(self, data_toread):
             stack_data = []
@@ -148,7 +148,7 @@ class Dashboard16(gdb.Command):
             self.get_stack_data(startaddr, data_toread, stack_data)
 
             for kernel_set in stack_data:
-                gdb.write(f"│ {kernel_set['addr']}: {kernel_set['val']:<37} │\n")
+                gdb.write(f"│ {kernel_set['addr']}: {kernel_set['val']:<34} │\n")
         
         
         def print_16(self):
@@ -159,18 +159,18 @@ class Dashboard16(gdb.Command):
             gdb.write(f"Kernel  stack : {hex(my_persistent_data['kernel_sttop'])}\n")
             gdb.write(f"User stack : {hex(my_persistent_data['user_sttop'])}\n")
         
-            gdb.write("\n┌────────────────── STACK VIEW ──────────────────┐\n")
-            gdb.write(  "│ [Kernel Stack]                                 │\n")
+            gdb.write("\n┌────────────────── STACK VIEW ──────────────┐\n")
+            gdb.write(  "│ [Kernel Stack]                             │\n")
             if my_persistent_data["kernel_sttop"] < Dashboard16.stack.kernel_stack_top_lin:
-                self.kernel_stack(10)
+                self.kernel_stack(20)
             
-            gdb.write(  "├────────────────────────────────────────────────┤\n")
+            gdb.write(  "├────────────────────────────────────────────┤\n")
             
-            gdb.write(  "│ [User Stack]                                   │\n")
+            gdb.write(  "│ [User Stack]                               │\n")
             if my_persistent_data["user_sttop"] < Dashboard16.stack.user_stack_top_lin:
-                self.user_stack(10)
+                self.user_stack(20)
 
-            gdb.write(  "└────────────────────────────────────────────────┘\n")
+            gdb.write(  "└────────────────────────────────────────────┘\n")
 
     class reg:
         def print_16(self):
@@ -186,19 +186,19 @@ class Dashboard16(gdb.Command):
             si = hex(gdb.parse_and_eval("$si"))
             ef = hex(gdb.parse_and_eval("$eflags"))
 
-            gdb.write("\n┌────────────────── REG VIEW ──────────────────┐\n")
-            gdb.write( f"│ AX      : {ax:<35}│\n")
-            gdb.write( f"│ BX      : {bx:<35}│\n")
-            gdb.write( f"│ CX      : {cx:<35}│\n")
-            gdb.write( f"│ DX      : {dx:<35}│\n")
-            gdb.write( f"│ SS      : {ss:<35}│\n")
-            gdb.write( f"│ ESP     : {esp:<35}│\n")
-            gdb.write( f"│ CS      : {cs:<35}│\n")
-            gdb.write( f"│ EIP     : {eip:<35}│\n")
-            gdb.write( f"│ DI      : {di:<35}│\n")
-            gdb.write( f"│ SI      : {si:<35}│\n")
-            gdb.write( f"│ EFLAGS  : {ef:<35}│\n")
-            gdb.write(  "└──────────────────────────────────────────────┘\n")
+            gdb.write("\n┌────────────────── REG VIEW ────────────────┐\n")
+            gdb.write( f"│ AX      : {ax:<33}│\n")
+            gdb.write( f"│ BX      : {bx:<33}│\n")
+            gdb.write( f"│ CX      : {cx:<33}│\n")
+            gdb.write( f"│ DX      : {dx:<33}│\n")
+            gdb.write( f"│ SS      : {ss:<33}│\n")
+            gdb.write( f"│ ESP     : {esp:<33}│\n")
+            gdb.write( f"│ CS      : {cs:<33}│\n")
+            gdb.write( f"│ EIP     : {eip:<33}│\n")
+            gdb.write( f"│ DI      : {di:<33}│\n")
+            gdb.write( f"│ SI      : {si:<33}│\n")
+            gdb.write( f"│ EFLAGS  : {ef:<33}│\n")
+            gdb.write(  "└────────────────────────────────────────────┘\n")
 
     def run():
         gdb.write("\033[H\033[J")
@@ -227,3 +227,5 @@ def stop_handler(event):
 
 # Register the handler with GDB's event system
 gdb.events.stop.connect(stop_handler)
+
+# x/1xh 0x60*16+0xe6
