@@ -18,19 +18,12 @@ start:
     mov ax, KERNEL_STACK_SEGMENT
     mov ss, ax
     mov sp, KERNEL_STACK_POINTER
-
-    ; set tf and if
-    pushf      ; 1. Push current FLAGS register onto the stack
-    pop ax     ; 2. Pop FLAGS into the AX register
-    or ax, 0x0300  ; 3. Use OR to set both bits (0x0200 | 0x0100 = 0x0300)
-    push ax    ; 4. Push the modified value back onto the stack
-    popf       ; 5. Pop the modified value into the FLAGS register
+    mov bp, sp
     
     mov ax, 0x0000
     mov es, ax
     mov word [es:0x0200], int_x80_handler 
     mov word [es:0x0202], cs
-
 
     ; Load program
     mov ah, 0x02    ; read call
@@ -47,13 +40,13 @@ start:
 
     mov si, kernel_msg
     call KERNEL_CODE_SEGMENT:print_k
-
+    
     ;----------------------------------User prepare
     ; setup code and stack segment for user
     push 'JJ'
+    pusha
 
     mov [Kernel_sp_save], sp
-    int 0x3  ;
     ;-------------------change segments
     mov ax, USER_CODE_SEGMENT
     mov ds, ax
@@ -63,6 +56,7 @@ start:
     mov ax, USER_STACK_SEGMENT
     mov ss, ax
     mov sp, USER_STACK_POINTER
+    mov bp, sp
     ;-------------------User program call
     call USER_CODE_SEGMENT:USER_CODE_OFFSET  ; need to change to long jump, bcz kernel address may store in user stack
 
@@ -72,15 +66,13 @@ start:
     
     mov ax, KERNEL_STACK_SEGMENT
     mov ss, ax 
-    mov sp, [Kernel_sp_save]
-    int 0x3  ;
+    mov sp, word [Kernel_sp_save] ; mov sp, [Kernel_sp_save]
+    mov bp, sp
     ;---------------------get segments from kernel stack
-    mov al, '-'
-    mov ah, 0x0E    ; AH=0Eh: Teletype output
-    int 0x10  
-
+    
+    popa
     pop ax
-    pop ax
+    mov bh, 0x00
     mov ah, 0x0E    ; AH=0Eh: Teletype output
     int 0x10  
 
@@ -145,7 +137,7 @@ kernel_done:
 kernel_msg:
     db 'In  Kernel!', 0x0D, 0x0A, 0
 MESSAGE_FAIL:
-    db 'Disk Read FAILED!\n', 0x0D, 0x0A, 0
+    db 'Disk Read FAILED!\n', 0x0D, 0x0A, 0 ;
 Kernel_sp_save:
     dw 0
 ; --- Padding  ---

@@ -66,9 +66,9 @@ class Dashboard16(gdb.Command):
             
             title = " Assembly by ndisasm (16-bit) "
             gdb.write(f"┌──\033[32m{title}\033[0m" + "─" * 20 + "──┐\n")
-            
+            gdb.write(f"│ QEMU       GDB\t{"":<30} │\n")
             for index, instr in enumerate(raw_asm_lines):
-                line = f"0x{instr['addr']} 0x{instr['gdb_addr']} {instr['length']}  {instr['asm']}"
+                line = f"0x{instr['addr']} {instr['gdb_addr']} {instr['length']}  {instr['asm']}"
                 if index == 0:
                     gdb.write(f"│ \033[32m{line:<52}\033[0m │\n")
                 else:
