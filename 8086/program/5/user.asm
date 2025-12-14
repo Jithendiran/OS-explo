@@ -2,6 +2,9 @@
 
 BITS 16
 ORG 0x000E ;
+; ndisasm -o 0x00E /tmp/usr.img
+; cs = 0x54ff ; to place debug point b *(0x54ff *16 + offset) choose offset from above output
+
 
 start:
     

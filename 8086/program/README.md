@@ -156,6 +156,11 @@ Once we read we will print `K` on screen and send `0x20` to PIC to indicate `EOI
 | 54FFE – 6DFFE | 347134 – 449534 | $\approx 100\text{KB}$ | User Code |
 | 6DFFF – 9FFFF | 449535 – 655359 | $\approx 200\text{KB}$ | User Stack |
 
+The above table have some issues, when executing inside `int 0x10` code 
+
+when `ss = 0x9FFF` and `sp = 0x000f`, after 12 by push value become `sp = 0x3` now current stack top `0x9fff3`, at this stage `push dword [cs:0x60e4]` code will execute it will push 4 bytes, so 4 - 3 = -1, address are repesented using unsigned values so it becomes `-1 == 0xffff`, so stack changed from  `0x9fff3` to `ss = 0x9FFF sp = 0xffff = 0xaffef`, but the expected address is `0x9FFEF`, it is not possible to mention -1 in address form so stack segment crashed
+
+To resolve the issue instead of using `ss = 0x9FFF sp = 0x000f`, use  `ss = 0x9000 sp = 0xffff` both will give same result
 
 #### program plan
 
@@ -173,7 +178,7 @@ The process begins when the computer is turned on:
 
 ##### 2. Application Run and System Calls
 
-The kernel hands over control to the User Program, which runs on its own User Stack. When the application needs to perform a task the hardware or OS controls (like printing to the screen or quitting):
+The kernel hands over control to the User Program, which runs on its own User Stack. When the application needs to perform a task the hardware or OS controls (like printing to the screen):
 
 * The User Program makes a **System Call** by triggering the **$x80$ interrupt**.
 * The CPU stops the User Program and immediately jumps to the **Kernel's Interrupt Handler** to process the request.
@@ -182,22 +187,21 @@ The kernel hands over control to the User Program, which runs on its own User St
 ##### 3. Service Execution
 
 The kernel's $x80$ interrupt handler performs the requested service:
+ The **$\text{DX}:\text{SI}$** registers contain the **memory address** of the text string to be printed. The kernel prints the text string until it sees a null character (the end-of-string marker).
 
-| Service ID ($\text{AH}$) | Service Name | Input | Action |
-| :--- | :--- | :--- | :--- |
-| **$0x01$** | **Print** | The **$\text{DX}:\text{SI}$** registers contain the **memory address** of the text string to be printed. | The kernel prints the text string until it sees a null character (the end-of-string marker). |
-| **$0x02$** | **Exit** | The **$\text{BH}$** register contains the program's **Exit Code** ($\mathbf{00}$ for success, $\mathbf{01}$ for failure). | The kernel terminates the User Program and reports the exit code back to the system (in this case, likely halting the CPU). |
 
 Once a service is complete (except for Exit), the kernel returns control to the User Program so it can continue running.
 
 
-   `nasm -f bin 5/loader.asm -o /tmp/boot1.bin`
+`nasm -f bin 8086/program/5/loader.asm -o /tmp/load.img && nasm -f bin 8086/program/5/kernel.asm -o /tmp/ker.img && nasm -f bin 8086/program/5/user.asm -o /tmp/usr.img  && cat /tmp/load.img /tmp/ker.img /tmp/usr.img > /tmp/boot.img`
 
-   `nasm -f bin 5/user.asm -o /tmp/boot2.bin`
+`qemu-system-i386 -fda /tmp/boot.img -nographic`
 
-   `cat /tmp/boot1.bin /tmp/boot2.bin > /tmp/boot.img`
+To get more info on debug follow the steps after gdb connection
 
-   `qemu-system-i386 -fda /tmp/boot.img -nographic`
+`(gdb) source 8086/program/5/helper.py`
+
+`(gdb) dash16`
 
 ### 7. Basic PIC Setup
 

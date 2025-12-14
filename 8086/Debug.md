@@ -1,5 +1,8 @@
 ##  QEMU/GDB Guide for Boot Sector Debugging
 
+> [!CAUTION] 
+> GDB used 32 bit address, for example if cs=0x60, ip =0x00, qemu address is 0x00600, but gdb will point to 0x00000000, because gdb ignore cs only consider offset for linear address, to get clear picture we need to convert the address, use [helper](./program/5/helper.py)
+
 ### I. Setup and Launch QEMU
 
 The first step is correct execution to enable remote debugging.
@@ -91,7 +94,11 @@ even here \$0xf000e05b is wrong, it still see as 32-bit, but ljmp statement is c
    0xffff0:	ljmp   $0x3630,$0xf000e05b
 ```
 
-#### Common Debugging Commands
+## Screen dump
+
+When a qemu is connected with GDB, after `int 0x10` the changes are written to VRAM buffer which will not immediately written to screen because of gdb paused the qemu, to see the content in the buffer use this command `monitor screendump /tmp/qemu-flush.ppm`, this will dump the screen buffer to the path mentioned ` /tmp/qemu-flush.ppm`
+
+## Common Debugging Commands
 
 | Command | Shorthand | Description |
 | :--- | :--- | :--- |

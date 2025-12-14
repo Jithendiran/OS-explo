@@ -3,6 +3,8 @@
 
 BITS 16
 ORG 0x0000 ; Assembly offset within the 0x00600 segment
+; qemu address 0x00600, GDB points to 0x0000000, both points to same address; to place debugger `b *(cs*16+eip) => b *(0x60*16 + <offset>)`
+; to find offset use this `ndisasm  /tmp/ker.img` to get whole address `ndisasm -o 0x600 /tmp/ker.img` then place debugger b *0x642
 
 %include "constant.inc"
 
@@ -43,10 +45,10 @@ start:
     
     ;----------------------------------User prepare
     ; setup code and stack segment for user
-    push 'JJ'
+    push 'J'
     pusha
 
-    mov [Kernel_sp_save], sp
+    mov [cs:Kernel_sp_save], sp ; mov by default use ds register, we override with cs
     ;-------------------change segments
     mov ax, USER_CODE_SEGMENT
     mov ds, ax
@@ -66,15 +68,15 @@ start:
     
     mov ax, KERNEL_STACK_SEGMENT
     mov ss, ax 
-    mov sp, word [Kernel_sp_save] ; mov sp, [Kernel_sp_save]
+    mov sp, [cs:Kernel_sp_save] ; mov by default use ds register, we override with cs
     mov bp, sp
     ;---------------------get segments from kernel stack
     
     popa
     pop ax
     mov bh, 0x00
-    mov ah, 0x0E    ; AH=0Eh: Teletype output
-    int 0x10  
+    mov ah, 0x0E
+    int 0x10    ; if J printed in screen, kernel stack restored success fully
 
     mov ax, KERNEL_CODE_SEGMENT
     mov ds, ax
