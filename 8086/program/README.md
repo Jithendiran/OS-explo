@@ -205,9 +205,62 @@ To get more info on debug follow the steps after gdb connection
 
 ### 7. Basic PIC Setup
 
+In 8086 interrupts are calssified as
+
+1.  **Processor-Defined Exceptions (0-4):** Used for critical errors like divide-by-zero or debug features.
+2.  **Reserved/Hardware Interrupts (5-31):** Intel reserved for future interrupts.
+3.  **User interrupts (32/Higher):** available for users
+
+The  $\text{PIC}$ maps $\text{IRQ} \ 0 \text{-} 7$ to $\text{Interrupts } 0\text{x}08 \text{-} 0\text{x}0\text{F}$, in 8086 it may not cause problem but it uses the reserved space for future implementations, so it is the best practice to move the $\text{PIC}$ mappings to user interrupts region, user interrupt starts from $0x20$(32)
+
+**why should remap?**
+
+#### 1. The Reality for the 8086
+
+In the original **8086/8088** processor and the original IBM PC architecture, the only reserved CPU exceptions are vectors $00h$ through $04h$.
+
+| Vector (Hex) | Purpose on 8086 | Hardware IRQ Default |
+| :---: | :---: | :---: |
+| $00h$ | Divide by Zero | - |
+| $01h$ | Single Step (Debug) | - |
+| $02h$ | Non-Maskable Interrupt (NMI) | - |
+| $03h$ | Breakpoint (INT 3) | - |
+| $04h$ | Overflow (INTO) | - |
+| **$08h$** | **Reserved by Intel** | **IRQ 0 (Timer)** |
+| **$09h$** | **Reserved by Intel** | **IRQ 1 (Keyboard)** |
+| ... | ... | ... |
+| **$0Fh$** | **Reserved by Intel** | **IRQ 7 (Printer)** |
+
+The hardware interrupts ($08h$ to $0Fh$) fall into the range that Intel had simply marked as **"Reserved"** for *future processor use*, but the 8086 CPU itself didn't generate any interrupts in that range.
+
+**Conclusion for 8086:** Running DOS on an 8086/8088 machine *without* remapping would not cause an immediate system crash due to a CPU exception. The hardware IRQs would be handled correctly at $08h$ to $0Fh$, and the reserved vectors in the $05h-07h$ and $0Ah-1Fh$ ranges would simply remain unused.
+
+#### 2. The Reason for the IBM PC's Flaw (Compatibility)
+
+The IBM PC design decision to use the reserved $08h-0Fh$ range for the 8259 PIC's output was essentially an **architectural flaw**.
+
+When the **80286** processor was released, it introduced new exceptions, and the later **80386** introduced even more, including the famous **General Protection Fault (GPF)**.
+
+| New CPU Exception (286/386+) | Vector (Hex) | Conflicting Original IRQ |
+| :---: | :---: | :---: |
+| Invalid Opcode | **$06h$** | (None in the hardware range) |
+| Device Not Available | **$07h$** | (None in the hardware range) |
+| Double Fault | **$08h$** | **IRQ 0 (Timer)** |
+| Invalid TSS | **$0Ah$** | **IRQ 2 (Cascade)** |
+| Segment Not Present | **$0Bh$** | **IRQ 3 (COM2)** |
+| Stack Segment Fault | **$0Ch$** | **IRQ 4 (COM1)** |
+| General Protection Fault | **$0Dh$** | **IRQ 5 (LPT2/Sound Card)** |
+
+**The Fatal Conflict:** If the system wasn't re-mapped, a General Protection Fault ($0Dh$) would trigger the **Hard Disk/LPT2 Interrupt Service Routine (ISR)**, leading to a catastrophic crash.
+
+commands for PIC for example x20, x21? what are other and it's uses?
+
 
 ### 8. Direct Video Memory Access (MMIO)
 
+  Concept: Directly writing text to memory location $\mathbf{0\text{xB}800:0\text{x}0000}$ (CGA/VGA text buffer) instead of using the slow $\text{INT } 0\text{x}10$ BIOS service.
+
+  Benefit: This contrasts sharply with $\text{Port I/O}$ ($\text{in}/\text{out}$) and shows how a program can be much faster by directly accessing hardware memory.
 
 ### 9. Simple Timer Interrupt
         switch between 2 tasks

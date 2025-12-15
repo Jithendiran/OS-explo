@@ -102,6 +102,18 @@ These four registers hold the **starting addresses** (segment base addresses) of
 
 Imagine the 1 MB of RAM is a very long bookcase. The four segment registers (CS, DS, SS, ES) are just four bookmarks, each marking the start of a 64 KB section (a segment). You can move these four bookmarks anywhere in the bookcase to focus on different sections, but the entire bookcase (the 1 MB) is still there.
 
+
+The 8086 CPU has default segment registers associated with certain types of memory access:
+
+| Memory Access Type | Default Segment Register |
+| :--- | :--- |
+| **Data Access** (General variables, `MOV`, `ADD`, etc., using memory address) | **$DS$ (Data Segment)** |
+| **Code Access** (Instruction fetch) | $CS$ (Code Segment) |
+| **Stack Access** (`PUSH`, `POP`, accessing data relative to $BP$ or $SP$) | $SS$ (Stack Segment) |
+| **Destination String** (String operations, `MOVSB`, `STOSB`, etc.) | $ES$ (Extra Segment) |
+
+For example `mov ax, [0xe7]` means `mov ax, [ds:0xe7]`, if we want to write to different segment likely cs, we have to override `mov ax, [cs:0xe7]`
+
 ### Pointer and Index Registers
 
 These registers typically hold the **Offset Address** within a segment.
