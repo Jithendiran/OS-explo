@@ -18,6 +18,9 @@ To fully engage with the assembly programs and architectural concepts, a basic, 
 
 ## Concepts
 
+### Part I: Firm ware and BIO
+[Info](./Firmware.md)
+
 ### Part I: 8086 Real Mode Foundation (Bare Metal)
 
 [Basic](./Basic.md)
