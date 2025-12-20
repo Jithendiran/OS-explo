@@ -142,6 +142,8 @@ The CPU needs to know which interrupt number to look up in its table.
 | **0-2** | **ID** | In 8086 mode, these are usually 0 (the PIC fills these based on which IRQ fired). |
 | **3-7** | **Address** | **The Base Address.** If you want IR0 to be Int 0x08, you write 00001000b (0x08). |
 
+If you send 0x20 ($00100\textbf{000}$), IR0 is 0x20. If you accidentally sent 0x25 ($00100\textbf{101}$), the PIC would likely still treat IR0 as 0x20 in 8086 mode because it overrides the last 3 bits.
+
 #### **ICW3: The "Wiring Map"**
 
 *Only used if you have a Master and Slave.*
@@ -233,3 +235,228 @@ The sequence follows this logic:
 | **Cascade, No ICW4** | ICW2 | **ICW3** | *Done* |
 | **Cascade, With ICW4** | ICW2 | **ICW3** | **ICW4** |
 
+## Physical interrupts
+
+The Physical Pins are Hardcoded: The hardware wiring is fixed. For example, the System Timer is physically wired to IR0 on the Master PIC. The Keyboard is physically wired to IR1. You cannot change the fact that a keyboard press pulls the IR1 line high.
+
+| IRQ | PIC | Physical Device | Default BIOS Vector | Typical "Remapped" Vector |
+| --- | --- | --- | --- | --- |
+| **IRQ 0** | Master | System Timer (PIT) | `0x08` | `0x20` |
+| **IRQ 1** | Master | Keyboard Controller | `0x09` | `0x21` |
+| **IRQ 2** | Master | **Cascade (Slave PIC)** | `0x0A` | `0x22` |
+| **IRQ 3** | Master | Serial Port (COM2 / COM4) | `0x0B` | `0x23` |
+| **IRQ 4** | Master | Serial Port (COM1 / COM3) | `0x0C` | `0x24` |
+| **IRQ 5** | Master | LPT2 (Parallel) or Sound | `0x0D` | `0x25` |
+| **IRQ 6** | Master | Floppy Disk Controller | `0x0E` | `0x26` |
+| **IRQ 7** | Master | LPT1 (Parallel Port) | `0x0F` | `0x27` |
+| **IRQ 8** | Slave | Real Time Clock (RTC) | `0x70` | `0x28` |
+| **IRQ 9** | Slave | ACPI / Free | `0x71` | `0x29` |
+| **IRQ 10** | Slave | Free / SCSI / NIC | `0x72` | `0x2A` |
+| **IRQ 11** | Slave | Free / PCI / USB | `0x73` | `0x2B` |
+| **IRQ 12** | Slave | PS/2 Mouse | `0x74` | `0x2C` |
+| **IRQ 13** | Slave | Coprocessor / FPU | `0x75` | `0x2D` |
+| **IRQ 14** | Slave | Primary ATA (Hard Disk) | `0x76` | `0x2E` |
+| **IRQ 15** | Slave | Secondary ATA (Hard Disk) | `0x77` | `0x2F` |
+
+
+#### 1. Do all systems have a Master and Slave?
+
+**Historically, No.**
+
+* **Original IBM PC (8088):** Only had **one** 8259A PIC. It had 8 IRQ lines (IRQ 0–7).
+* **IBM PC/AT (80286 and later):** This is where the **Slave PIC** was added. Because 8 interrupts weren't enough for new hardware (like hard disks and mice), they added a second chip.
+* **Modern Systems:** They still *emulate* two PICs for backward compatibility (in the Southbridge or Chipset), but they primarily use **APIC** (Advanced PIC), which can handle 24 or more interrupts.
+
+#### 2. If there is no Slave, can't we use a Mouse?
+
+**Technically, you could, but not easily.**
+The standard **PS/2 Mouse** is hardwired to **IRQ 12** on the Slave PIC.
+
+* If you only had a Master PIC (IRQ 0–7), you would have no "pin" for the mouse to signal the CPU.
+* To use a mouse on an old 1-PIC system, you would have to use a **Serial Mouse** connected to a COM port (usually **IRQ 4** for COM1). Since IRQ 4 is on the Master PIC, it would work fine.
+
+#### 3. If there is no Slave, what is IRQ2?
+
+This is the most interesting part of the 8259A's history!
+
+* **In a 1-PIC System:** IRQ2 is just a **normal, general-purpose interrupt pin**. On the original IBM PC, it was actually wired to the expansion slots on the motherboard so that add-in cards could use it.
+* **In a 2-PIC System:** IRQ2 is repurposed as the **Cascade Line**. It is no longer available for hardware devices because it is physically connected to the "INT" output pin of the Slave PIC.
+
+
+### **Operational Flow**
+
+OCW (Operational Command Word): Used during normal operation. It is a command byte sent by the CPU to the PIC to control its behavior *during* normal system operation. ICWs set the "static" hardware configuration, OCWs handle "dynamic" events.
+
+We use OCW to send an EOI (End of Interrupt) after a device finishes its task, or to Mask/Unmask specific IRQs (like turning off the mouse but keeping the keyboard on).
+
+* **Timing:** ICWs are sent **once** (usually by the BIOS/Firmware or OS kernel) during the boot-up sequence. OCWs are sent **many times per second**—specifically every time an interrupt occurs.
+* **Frequency:**
+* **ICW:** Infrequent (Once per boot).
+* **OCW:** Constant (Every time a key is pressed, a timer ticks, or data arrives from a disk).
+
+You cannot use OCWs until the ICWs have properly set up the chip.
+
+There are three OCW: **OCW1**, **OCW2**, and **OCW3**
+
+Unlike the ICWs (Initialization), the OCWs do not have to be sent in a specific $1 \rightarrow 2 \rightarrow 3$ sequence. It can be sent any order
+
+
+#### **OCW1: The Masking (IMR)**
+This is used to selectively enable or disable specific hardware lines.
+
+* **Job:** It writes/reads directly to the **IMR (Interrupt Mask Register)**.
+* **The Port Logic:** This is the only OCW sent to the **Data Port** ( for Master,  for Slave).
+* **Read/Write:** You can read this port to see the current mask.
+
+| Bit | Name | Function |
+| --- | --- | --- |
+| **0-7** | **M0 - M7** | **1** = Masked (Interrupt Disabled); **0** = Unmasked (Enabled). |
+
+#### ** OCW2: The EOI (End of Interrupt)**
+
+This is the most critical OCW for an 8086 programmer. It manages the **ISR (In-Service Register)**.
+
+* **Job:** It tells the PIC when an interrupt handler is finished so the PIC can re-enable lower-priority interrupts.
+* **Specific EOI:** You tell the PIC exactly which IRQ bit to clear.
+
+> **Note:** Sending **0x20** to the Command Port is the standard way to say "Normal EOI".
+
+**Bit Table for OCW2 (Sent to Port 0x20/0xA0):**
+| Bit | Name | Description |
+| :--- | :--- | :--- |
+| **0-2** | **L0-L2** | IRQ level to be acted upon (0-7). Only used for "Specific" commands. |
+| **3-4** | **00** | **Identity Bits:** These must be `00` so the PIC knows this is OCW2 and not ICW1 or OCW3. |
+| **5** | **EOI** | **1** = End of Interrupt command. |
+| **6** | **SL** | **Selection:** 1 = Specific; 0 = Non-Specific. |
+| **7** | **R** | **Rotation:** 1 = Rotate priority; 0 = Fixed priority. |
+
+**The OCW2 Complete Functional Table**
+
+| R (Bit 7) | SL (Bit 6) | EOI (Bit 5) | Hex (approx) | Command Name | What the PIC actually does |
+| --- | --- | --- | --- | --- | --- |
+| **0** | **0** | **1** | **** | **Non-Specific EOI** | **The Standard:** Automatically clears the highest-priority bit currently set in the **ISR**. (Used for 8086 normal interrupts). |
+| **0** | **1** | **1** | **** | **Specific EOI** | Clears the **ISR bit** for the specific IRQ number () provided in bits . |
+| **1** | **0** | **1** | **** | **Rotate on Non-Specific EOI** | Clears the highest ISR bit, then immediately makes that IRQ line the **lowest priority** (moves it to the back of the line). |
+| **1** | **0** | **0** | **** | **Rotate in Auto-EOI Mode (SET)** | Tells the PIC: "From now on, every time you finish an interrupt automatically, rotate the priority." |
+| **0** | **0** | **0** | **** | **Rotate in Auto-EOI Mode (CLEAR)** | Disables the automatic rotation described above. |
+| **1** | **1** | **1** | **** | **Rotate on Specific EOI** | Clears the specific ISR bit () and makes that IRQ line the lowest priority. |
+| **1** | **1** | **0** | **** | **Set Priority** | **Does NOT clear any ISR bits.** It just redefines the priority loop so that IRQ () becomes the **lowest priority**. |
+| **0** | **1** | **0** | **** | **No Operation** | Literally does nothing. The PIC ignores this combination. |
+
+#### **Detailed Explanation of the Parameters**
+
+##### **1. Bits 0-2: The "Target" ()**
+
+These bits act as a 3-bit binary number ().
+
+* They are **ignored** if the command is "Non-Specific" ().
+* They are **required** if the command is "Specific" ().
+
+##### **2. Bit 5: The "Finish Line" ()**
+
+* **If 1:** The PIC performs an "End of Interrupt" action. It looks at the **ISR** register and flips a bit from  back to . This is crucial because while an ISR bit is , the PIC blocks all equal or lower priority interrupts.
+* **If 0:** The PIC does **not** touch the ISR. It only changes the priority rules (Rotation).
+
+###### **The "Set Priority" Logic**
+
+When you use  (Set Priority), you are defining the **Lowest Priority**. The **Highest Priority** automatically becomes the next one in the circle.
+
+**Example:**  You send $0xC3$ (Binary: $11000011$).
+
+* Bits 0-2 =  3 (IRQ3).
+* This makes **IRQ3 the lowest priority**.
+* Therefore, **IRQ4** becomes the **highest priority**.
+
+**New Priority Circle:**
+$$IRQ4(H) \rightarrow IRQ5 \rightarrow IRQ6 \rightarrow IRQ7 \rightarrow IRQ0 \rightarrow IRQ1 \rightarrow IRQ2 \rightarrow IRQ3(L)$$
+
+##### **3. Bit 6: The "Targeting Mode" ()**
+
+* **(Non-Specific):** The PIC is "smart." It knows which interrupt you are currently handling (the highest one set in ISR). You don't have to name it.
+* **(Specific):** You are being explicit. You are telling the PIC: "I know what I'm doing, act on IRQ ."
+
+###### **Why use Specific EOI?**
+
+In an 8086 system, you usually use **Non-Specific ()**. However, if you are doing **Nested Interrupts** (where you allow a new interrupt to start before the current one finishes), sometimes you might finish them in a different order than they arrived. In that rare case, you use a **Specific EOI** to tell the PIC exactly which one you are closing.
+
+##### **4. Bit 7: The "Fairness Logic" ()**
+
+* **(Fixed Priority):** IRQ0 is always the most important. IRQ7 is always the least.
+* **(Rotating Priority):** The "circular" mode. Whoever just got finished is considered "least important" for the next round so other devices get a turn.
+
+#### **OCW3: The "Spy" Command**
+
+OCW3 is used to inspect the "hidden" registers (IRR and ISR) or change special modes.
+
+* **Job:** It prepares the PIC for a "Status Read." Since the Command Port usually only receives commands, you use OCW3 to tell the PIC: "The next time I read from this port, give me the IRR/ISR bits instead of your status."
+* **Poll Mode:** Used if you want to ignore the CPU's `INTR` pin and manually check if an interrupt has occurred.
+
+**Bit Table for OCW3 (Sent to Port 0x20/0xA0):**
+| Bit | Name | Description |
+| :--- | :--- | :--- |
+| **0** | **RIS** | **0** = Read IRR on next read; **1** = Read ISR on next read. |
+| **1** | **RR** | **Read Register:** 0: Next read is normal; 1: Next read from Command Port returns the register selected by RIS. |
+| **2** | **P** | **Poll Mode:** 1 = Enable Polling; 0 = Disable. |
+| **3** | **1** | **Identity Bit:** Must be `1`. (This distinguishes OCW3 from OCW2). |
+| **4** | **0** | **Identity Bit:** Must be `0`. (This distinguishes OCW3 from ICW1). |
+| **5** | **SMM**| **Special Mask Mode** Used with Bit 6 to enable/disable Special Masking.|
+| **6** | **EBM** | **Enable SMM** 1: Actively change SMM state; 0: Ignore SMM change. |
+| **7** | **0** | Reserved. |
+
+##### **1. Reading the Internal Registers (IRR and ISR)**
+
+This is the most common use for OCW3. Since the IRR and ISR are internal, the CPU cannot "see" them directly. You must "prime" the PIC first.
+
+* **To read the IRR (Interrupt Request Register):**
+1. Send **** () to Port .
+2. Immediately perform `IN AL, 0x20`. `AL` now contains the IRR.
+
+
+* **To read the ISR (In-Service Register):**
+1. Send **** () to Port .
+2. Immediately perform `IN AL, 0x20`. `AL` now contains the ISR.
+
+
+##### **2. Poll Mode (The "Manual" Mode)**
+
+If you set **Bit 2 (P)** to , the PIC enters Poll Mode. In this mode, the CPU ignores the `INT` pin and essentially asks the PIC: "Has anything happened since I last checked?"
+
+When you perform an `IN` instruction after sending a Poll command, the PIC returns a byte with this format:
+
+* **Bit 7:**  if an interrupt is actually pending ( if none).
+* **Bits 0-2:** The binary number () of the highest priority interrupt currently waiting.
+
+This is useful if you want to write a program that handles hardware events without using the actual 8086 interrupt vectoring system.
+
+##### **3. Special Mask Mode (SMM)**
+
+This is an advanced feature (Bits 5 and 6).
+
+* **Normal Masking:** If an IRQ is in service (ISR bit is 1), all lower priority interrupts are blocked.
+* **Special Mask Mode:** When enabled, the PIC allows **all** non-masked interrupts to fire, even if they are lower priority than the one currently being handled. This is rarely used in basic 8086 programming but is essential for complex real-time kernels.
+
+| ESMM (Bit 6) | SMM (Bit 5) | Result |
+| --- | --- | --- |
+| **0** | **X** | No change to SMM. |
+| **1** | **0** | Disable Special Mask Mode. |
+| **1** | **1** | Enable Special Mask Mode. |
+
+
+#### How to Distinguish the Three OCWs (Hardware Logic)
+
+The PIC's internal logic uses the **Port Address** and **Bits 3 & 4** of the data byte to know what you are doing:
+
+1. **Is it the Data Port (0x21/0xA1)?** It is **OCW1** (The Mask).
+2. **Is it the Command Port (0x20/0xA0)?**
+* Look at **Bit 4**: If it's `1`, it's **ICW1** (Re-initialization).
+* If Bit 4 is `0`, look at **Bit 3**:
+    * If Bit 3 is `0`, it is **OCW2** (EOI/Priority).
+    * If Bit 3 is `1`, it is **OCW3** (Status/Poll).
+
+
+## **Summary**
+
+1. **ICWs:** 1, 2, 3, 4 (Sequence required).
+2. **OCW1:** Masking (Data Port).
+3. **OCW2:** EOI, change priority (Command Port, Bit 3=0).
+4. **OCW3:** Status (Command Port, Bit 3=1).
