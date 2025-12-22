@@ -253,19 +253,44 @@ When the **80286** processor was released, it introduced new exceptions, and the
 
 **The Fatal Conflict:** If the system wasn't re-mapped, a General Protection Fault ($0Dh$) would trigger the **Hard Disk/LPT2 Interrupt Service Routine (ISR)**, leading to a catastrophic crash.
 
-commands for PIC for example x20, x21? what are other and it's uses?
+[info](./7/README.md)
 
 
 ### 8. Direct Video Memory Access (MMIO)
 
-  Concept: Directly writing text to memory location $\mathbf{0\text{xB}800:0\text{x}0000}$ (CGA/VGA text buffer) instead of using the slow $\text{INT } 0\text{x}10$ BIOS service.
+Concept: Directly writing text to memory location $\mathbf{0\text{xB}800:0\text{x}0000}$ (CGA/VGA text buffer) instead of using the slow $\text{INT } 0\text{x}10$ BIOS service.
 
-  Benefit: This contrasts sharply with $\text{Port I/O}$ ($\text{in}/\text{out}$) and shows how a program can be much faster by directly accessing hardware memory.
+The address 0xB8000 is hardwired into the hardware architecture of the PC. It is not something the BIOS "sets up" or creates; it is a physical reality of how the VGA-compatible video hardware is mapped into the CPU's address space.
+
+* 0xA0000 - 0xBFFFF: Reserved for Video RAM (VRAM).
+* 0xB8000: The specific starting point for CGA/EGA/VGA Color Text Mode.
+
+Modern machine
+While the 8086 "Real Mode" address are fixed for compatibility, modern hardware (starting with the PCI bus) uses Base Address Registers (BARs).
+* During bootup, the BIOS/UEFI "probes" the hardware.
+* The hardware says: "I need 4KB of memory space."
+* The BIOS assigns a custom address to that hardware for that session.
+
+When you use BIOS, the CPU has to save state, switch to the BIOS code, perform checks, and then write to memory. By writing directly to 0xB8000, you bypass all that overhead.
+
+The Layout of VGA Text BufferThe screen is a grid of $80 \times 25$ characters. Each character on the screen takes up 2 bytes in memory:
+1. Byte 0: The ASCII Character code.
+2. Byte 1: The Attribute byte (Foreground and Background colors).
+
+Flow
+1. The CPU places the address 0xB8000 on the Address Bus.
+2. Chipset will redirect this to video memory
+3. The Video Card intercepts the data (your character and color) and stores it in its own internal memory.
+4. The Video Card's hardware logic then constantly reads that internal memory to generate the VGA signal (pixels) for your monitor.
+
+[refer](./mmio.asm)
 
 ### 9. Simple Timer Interrupt
         switch between 2 tasks
         use 2 c programs
 
+### 10. Custom BIOS
+[Bios](./bios.asm) 
 
 ## Refer
 
