@@ -17,7 +17,7 @@ This is used to store 1 bit of value
 The most common way to build an SR Latch is by using two NOR gates in a "cross-coupled" configuration. This means the output of the first gate is fed back into the input of the second, and vice versa.
 
 * Inputs: S (Set) and R (Reset).
-* Outputs: Q (the stored bit) and 6$\bar{Q}$ (the "Not Q" or complement).7 In a healthy state, if 8$Q$ is 1, 9$\bar{Q}$ must be 0.
+* Outputs: Q (the stored bit) and $\bar{Q}$ (the "Not Q" or complement). In a healthy state, if 8$Q$ is 1, 9$\bar{Q}$ must be 0.
 
 ### How It Works (The 4 States)
 
