@@ -90,15 +90,3 @@ The Fetch-Decode-Execute (F-D-E) cycle, also known as the Instruction Cycle, is 
 3. Instruction Cycle: This is the total time required to completely execute one machine instruction (Fetch, Decode, Execute, Write Back).
 * $1 \text{ clock cycle} \ne 1 \text{ instruction}$.
 * An instruction cycle is composed of one or more bus cycles (and internal CPU cycles).
-
-
-## Todo
-Synchronous Digital Logic.
-
-* The Clock Signal (Square Wave, Clock Edge)
-* Synchronous Design (Lockstep Timing)
-* Registers (Flip-Flops, Latching Action)
-* Internal CPU Bus (Data Highway)
-* Propagation Delay (Signal Travel Time)
-* Setup Time (Required Stability before the Edge)
-* Clock Cycle Time (The $1 / \text{Frequency}$ calculation)

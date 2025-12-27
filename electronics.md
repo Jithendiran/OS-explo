@@ -119,19 +119,19 @@ To understand why we need a clock, let's look at a simple math problem:
 
 `24 + 34 + 77 = 135`
 
-To do this in a circuit, we need an **8-bit Adder** and an **8-bit Latch** (to store the running total).
+To do this in a circuit, we need an **8-bit Adder** and an **8-bit flipflop** (to store the running total).
 
 ![circult diagram](./res/adder-latch.png)
 
 Since it has internal memory we no need to note down the result in each step and feed with next input
 
-There is a `clk` in the latch, latch will accept the input from adder when we close the `add` circuit
+There is a `clk` in the flipflop, flipflop will accept the input from adder when we close the `add` circuit
 
 **The Sequence:**
 
-1. **Start:** Latch is `0`. Input is `24`. Adder calculates $0 + 24 = 24$. We store `24` in the Latch by closing add circuit (pressing the button kind of).
-2. **Next:** Latch is `24`. Input is `34`. Adder calculates $24 + 34 = 58$. We store `58` in the Latch.
-3. **Next:** Latch is `58`. Input is `77`. Adder calculates  $58 + 77 = 135$. We store `135` in the Latch.
+1. **Start:** flipflop is `0`. Input is `24`. Adder calculates $0 + 24 = 24$. We store `24` in the flipflop by closing add circuit (pressing the button kind of).
+2. **Next:** flipflop is `24`. Input is `34`. Adder calculates $24 + 34 = 58$. We store `58` in the flipflop.
+3. **Next:** flipflop is `58`. Input is `77`. Adder calculates  $58 + 77 = 135$. We store `135` in the flipflop.
 
 ### Why can't we just use a simple "Level Trigger" (Switch)?
 
@@ -143,20 +143,33 @@ If you press the button for even 0.1 seconds, the CPU sees that as a "High" sign
 **How wrong could it go?**
 
 * **Time 0:** You press the button. Result = $0 (\text{memory}) + 24 (\text{input}) = 24$.
-* **Time 1 (Still pressing):** The Latch sees the "High" signal is still there. It takes the new `24` from memory and adds the `24` from the input again. Result =  $24 + 24 = 48$.
+* **Time 1 (Still pressing):** The flipflop sees the "High" signal is still there. It takes the new `24` from memory and adds the `24` from the input again. Result =  $24 + 24 = 48$.
 * **Time 2:** It happens again! Result = $48 + 24 = 72$.
 
 In a split second, your answer is `72` (or much higher) instead of `24`. This is a **feedback loop error**.
 
 #### The Solution: Edge Triggering
 
-An **Edge Trigger** only activates at the exact moment the signal jumps from 0 to 1 (the Rising Edge). Even if you hold the button for an hour, the Latch only "captures" the value **once**. This guarantees that $0 + 24$ stays $24$.
+An **Edge Trigger** only activates at the exact moment the signal jumps from 0 to 1 (the Rising Edge). Even if you hold the button for an hour, the flipflop only "captures" the value **once**. This guarantees that $0 + 24$ stays $24$.
 
 
 ### Automating the Process
 
 Instead of a human pressing a button, we use a **Clock Signal** (a continuous square wave). We can divide one "Clock Cycle" into four stages to handle different tasks.
 
+1. Rise edge
+    - Circuits made of flipflop usually active in this stage like counters
+
+2. High level
+    - Many components use a High level as a "Go" signal to perform a continuous task like ALU
+
+3. Fall edge
+    - Double Data Rate (DDR): In DDR memory, data is transferred on both the rising and falling edges to double the speed.
+    - Flip flop can be designed to active on Fall edge
+
+4. Low level
+    - Many "Reset" pins are active-low, meaning the system stays in a reset state as long as the signal is Low.
+    - In dynamic memory (DRAM), the Low level is often used to "pre-charge" internal lines before the next read cycle.
 
 **Imagine we have 3 registers (A, B, C) holding our numbers:**
 
@@ -172,9 +185,7 @@ see we have a pattern `edge -> level -> edge -> level`, our square wave also hav
 
 By the end of one full cycle, one addition is perfectly finished. This is **Controlled Automation**. Because each step has its own "moment" on the wave, the operations don't collide.
 
-our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in latch
-
-By the end of 3rd cycle, we get the result. we got the result in automated and controlled way, The controlled way i mean here is only one operation will happen at a stage, so the result is guaranteed
+our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in flipflop
 
 
 ### What if one task takes longer than another?
@@ -195,6 +206,92 @@ The clock frequency is chosen based on the **worst-case scenario** (the slowest 
 #### Note
 * Latches are level triggered
 * D Flip-Flop is edge-triggered
+
+---- correct flow
+
+### Automating the Process
+
+Instead of a human pressing a button, we use a **Clock Signal** (a continuous square wave). We can divide one "Clock Cycle" into four stages to handle different tasks.
+
+1. Rise edge
+    - Circuits made of flipflop usually active in this stage like counters
+
+2. High level
+    - Many components use a High level as a "Go" signal to perform a continuous task like ALU
+
+3. Fall edge
+    - Double Data Rate (DDR): In DDR memory, data is transferred on both the rising and falling edges to double the speed.
+    - Flip flop can be designed to active on Fall edge
+
+4. Low level
+    - Many "Reset" pins are active-low, meaning the system stays in a reset state as long as the signal is Low.
+    - In dynamic memory (DRAM), the Low level is often used to "pre-charge" internal lines before the next read cycle.
+
+**Imagine we have 3 registers (A, B, C) holding our numbers:**
+
+1. **Rising Edge:(Starter)** Read the number from the register (A), registers are usually flipflop so it activated at Rise edge.
+2. **High Level:** The Adder receives the new numbers.
+3. **Falling Edge:** The Adder is still working due to propogation delay
+4. **Low Level:** Doing nothing, just give enough time that adder has 100% 
+
+#### Cycle process
+1. 
+    1. Rise edge:
+        - flipflop capture the data from Adder: currently it is 0
+        - Push the flipflop data and A register to Adder (24)
+        (These two operations happen in the same stage)
+    2. High level:
+        - Adder receives the number
+        - Due to propogation delay it would take some time
+    3. Falling edge:
+        - Adder is working, due to complex logics and propogation delay
+    4. Low Level:
+        - At the end of the low level adder should have the stable result of sum (24)
+        - Move to next register
+2. 
+    1. Rise edge:
+        - 24 captured in flipflop
+        - Push flipflop (24) and B register to Adder(34)
+    2. High level:
+        - adding
+    3. Falling edge:
+        - adding
+    4.  Low Level:
+        - At the end of low level adder have result (58)
+        - Move to next register
+
+3. 
+    1. Rise edge:
+        - 58 captured in flipflop
+        - Push flipflop (58) and B register to Adder(77)
+    2. High level:
+        - adding
+    3. Falling edge:
+        - adding
+    4.  Low Level:
+        - At the end of low level adder have result (135)
+        - Move to next register
+
+**How can it do both without "Crashing"?**
+
+It seems like a paradox: how can it capture adder output at the same time pushing the values to adder?
+
+This works because of Propagation Delay.
+* The Capture: At the nanosecond the clock rises, the internal "doors" of the flip-flop lock instantly. It has now trapped the $24$.
+* The Push: It takes a few more picoseconds for that trapped $24$ to physically move through the transistors and appear at the output pin (Q).
+* The Safety Gap: By the time that $24$ reaches the Adder and the Adder starts changing its answer (to $24+34$), the flip-flop’s "input door" is already locked tight.
+
+**Adder circuit is not a edge\level trigger**
+
+Unlike latches or Flip-Flops, an adder does not have a "Clock" or "Enable" pin. It doesn't wait for a signal to tell it to start adding.
+- How it works: As soon as you change the inputs ($input$ or $flipflop$), the output ($Sum$) starts changing immediately.
+- The Delay: The only reason the output isn't "instant" is because of Propagation Delay (the physical time it takes electricity to travel through the transistors).
+
+
+By the end of one full cycle, one addition is perfectly finished. This is **Controlled Automation**. Because each step has its own "moment" on the wave, the operations don't collide.
+
+our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in flipflop
+
 
 ## What is BUS?
 Bus is a common connector, like registers, memory, ALU are linked with BUS
