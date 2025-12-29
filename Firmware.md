@@ -194,6 +194,12 @@ When an 8086 starts up, there is no "transfer" or "copying" happening yet. The C
 #### Is the Memory Map "Hardwired"?
 The addresses themselves (the numbers like 0xA0000) are logical definitions. However, the Motherboard Chipset is hardwired to know which physical wire to "electrify" when the CPU asks for a specific address.
 
+The CPU just puts an address on the bus and sets the $M/\overline{IO}$ pin. It doesn't actually know if a RAM chip or a Video Card is plugged into that address. That job belongs to the Address Decoder (usually a logic chip like the 74LS138).
+
+do not need to initializ, The 74LS138 is a purely hardware-based logic chip. It is "hard-wired" on the motherboard. Unlike a PIC or a Timer, it has no internal registers, no memory, and no "state" that needs to be configured by software.
+
+Just for your awareness: if you were working on a much later system (like a Pentium or Core i7), the "address decoding" is handled by the Southbridge or PCH. In those systems, the BIOS does have to initialize "Base Address Registers" (BARs) to tell the chipset where the devices should live.
+
 #### Is Memory only 640KB? (The "RAM" vs "Address" distinction)
 In the 8086 era, we might have had 1MB of physical RAM chips, but you couldn't use all of it for your programs.
 
@@ -247,3 +253,7 @@ When you turn on your 8086 (or a modern PC):
 2. (BIOS) walks around and knocks on every door. It asks the **Keyboard Firmware**: "Are you there?" and the **WiFi Card**: "Who are you?"
 3. Each device responds using its own internal firmware to say "I'm a keyboard, here is my ID."
 4. The BIOS then records all this and tells the CPU, "Okay, the system is ready, let's start the OS."
+
+
+https://github.com/640-KB/GLaBIOS/blob/main/src/GLABIOS.ASM
+https://www.youtube.com/watch?v=vznYVh5ugnk

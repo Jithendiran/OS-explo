@@ -5,11 +5,6 @@ Source will have input connected, Drain is the output. We will control the switc
 
 [Refer the water flow](https://youtu.be/AwRJsze_9m4?t=434)
 
-## Propagation Delay
-
-Electricity moves at nearly the speed of light, but transistors take time to "charge up" and flip. This tiny pause—often just a few nanoseconds ($10^{-9}$ seconds) is called Propagation Delay.
-
-Why it matters: If you have 100 gates in a row, the delay adds up. You cannot ask for the answer until the electricity has had enough time to "propagate" through all 100 gates.
 
 ## SR Latch (NOR)
 This is used to store 1 bit of value
@@ -31,6 +26,35 @@ The most common way to build an SR Latch is by using two NOR gates in a "cross-c
 [SR Latch](https://youtu.be/KM0DdEaY5sY)  
 
 [D Latch](https://youtu.be/peCh_859q7Q)
+
+## Timings
+
+### Rise time
+* Voltage won't would jump from 0V to 5V instantly, it will increase gradually(think of it like filling a tiny bucket with water)
+
+### Settling Time
+* Settling Time  is the total time it takes for a signal to not just reach its destination, but to stop "shaking" and stay within a steady, usable range.
+
+* While Rise Time tells you how fast a signal jumps from 0 to 1, Settling Time tells you how long you have to wait before that "1" is stable enough to trust.
+
+* Settling Time must be finished before your Setup Time window begins
+
+### Setup Time
+* The minimum amount of time the data signal must be stable before the clock edge arrives.
+
+### Hold Time
+* The minimum amount of time the data signal must remain stable after the clock edge has passed. This ensures the internal latches have fully captured the value.
+
+### Fall time
+* The counterpart to rise time; it is the time taken to transition from high to low
+(think of it like draining a tiny bucket)
+
+### Propagation Delay
+
+Electricity moves at nearly the speed of light, but transistors take time to "charge up" and flip. This tiny pause—often just a few nanoseconds ($10^{-9}$ seconds) is called Propagation Delay.
+
+Why it matters: If you have 100 gates in a row, the delay adds up. You cannot ask for the answer until the electricity has had enough time to "propagate" through all 100 gates.
+
 
 ## Clock
 A clock signal is a voltage that oscillates between 0 (Low) and 1 (High) at a constant frequency. 
@@ -157,20 +181,6 @@ An **Edge Trigger** only activates at the exact moment the signal jumps from 0 t
 
 Instead of a human pressing a button, we use a **Clock Signal** (a continuous square wave). We can divide one "Clock Cycle" into four stages to handle different tasks.
 
-1. Rise edge
-    - Circuits made of flipflop usually active in this stage like counters
-
-2. High level
-    - Many components use a High level as a "Go" signal to perform a continuous task like ALU
-
-3. Fall edge
-    - Double Data Rate (DDR): In DDR memory, data is transferred on both the rising and falling edges to double the speed.
-    - Flip flop can be designed to active on Fall edge
-
-4. Low level
-    - Many "Reset" pins are active-low, meaning the system stays in a reset state as long as the signal is Low.
-    - In dynamic memory (DRAM), the Low level is often used to "pre-charge" internal lines before the next read cycle.
-
 **Imagine we have 3 registers (A, B, C) holding our numbers:**
 
 1. **Rising Edge:** Read the number from the register (A).
@@ -187,31 +197,16 @@ By the end of one full cycle, one addition is perfectly finished. This is **Cont
 
 our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in flipflop
 
+>**Adder circuit is not a edge\level trigger**   
+>    Unlike latches or Flip-Flops, an adder does not have a "Clock" or "Enable" pin. It doesn't wait for a signal to tell it to start adding. It is always on
+>    - How it works: As soon as you change the inputs ($input$ or $flipflop$), the output ($Sum$) starts changing immediately.
+>    - The Delay: The only reason the output isn't "instant" is because of Propagation Delay (the physical time it takes electricity to travel through all the transistors inside add logic). 
 
-### What if one task takes longer than another?
+By the end of one full cycle, one addition is perfectly finished. This is **Controlled Automation**. Because each step has its own "moment" on the wave, the operations don't collide.
 
-**1. Duty Cycle Adjustments**
-If "Addition" takes more time than "Incrementing the Address," we can use a **67% Duty Cycle**. This makes the "High" part of the wave longer and the "Low" part shorter, giving the Adder more time to settle.
+our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in flipflop
 
-**2. Frequency Divisor**
-If the whole system is too fast, we use a frequency divisor to slow down the "heartbeat" of the CPU so every component can keep up.
-
-**3. The "Wait" State**
-What if the component is *really* slow (like external RAM)?
-In this case, the component sends a "Wait" signal to the CPU. The CPU will stop and "idle" on a specific part of the clock cycle until the component says, "I am done!" Then, the CPU continues to the next stage.
-
-
-The clock frequency is chosen based on the **worst-case scenario** (the slowest task). This ensures that every operation has enough time to finish before the next "Rising Edge" starts a new cycle.
-
-#### Note
-* Latches are level triggered
-* D Flip-Flop is edge-triggered
-
----- correct flow
-
-### Automating the Process
-
-Instead of a human pressing a button, we use a **Clock Signal** (a continuous square wave). We can divide one "Clock Cycle" into four stages to handle different tasks.
+**The above flow might make sense, but electronics won't work like that, for understanding above method should be fine**
 
 1. Rise edge
     - Circuits made of flipflop usually active in this stage like counters
@@ -221,77 +216,170 @@ Instead of a human pressing a button, we use a **Clock Signal** (a continuous sq
 
 3. Fall edge
     - Double Data Rate (DDR): In DDR memory, data is transferred on both the rising and falling edges to double the speed.
-    - Flip flop can be designed to active on Fall edge
+    - Flip flop can be designed to active on Fall edge (JK flip flop)
 
 4. Low level
     - Many "Reset" pins are active-low, meaning the system stays in a reset state as long as the signal is Low.
     - In dynamic memory (DRAM), the Low level is often used to "pre-charge" internal lines before the next read cycle.
 
-**Imagine we have 3 registers (A, B, C) holding our numbers:**
 
-1. **Rising Edge:(Starter)** Read the number from the register (A), registers are usually flipflop so it activated at Rise edge.
-2. **High Level:** The Adder receives the new numbers.
-3. **Falling Edge:** The Adder is still working due to propogation delay
-4. **Low Level:** Doing nothing, just give enough time that adder has 100% 
+Control unit is the master of the CPU, it will decide which part of the CPU will do what, on each edge trigger it will start the operation
+
+1.  Adder stage (cycle 1)
+    1. **Rising Edge:(Starter)** Push the Inputs to the adder.
+    2. **High Level:** The Adder receives the new numbers. Think like adder received the input and started doing the math
+    3. **Falling Edge:** The Adder is still working due to propogation delay
+    4. **Low Level:** Doing nothing, just give enough time that adder has 100% 
+    At the end of the cycle adder done with the operation
+2. Capture and move stage(cycle 2)
+    1. **Rise:** capture the reult and move to next register (increment the address)
+    2. **High Level:** Do nothing
+    3. **Falling Edge:** Do nothing
+    4. **Low Level:** Do nothing
+    At the end of the second cycle CU select the second register
 
 #### Cycle process
 1. 
-    1. Rise edge:
-        - flipflop capture the data from Adder: currently it is 0
-        - Push the flipflop data and A register to Adder (24)
-        (These two operations happen in the same stage)
-    2. High level:
-        - Adder receives the number
-        - Due to propogation delay it would take some time
-    3. Falling edge:
-        - Adder is working, due to complex logics and propogation delay
-    4. Low Level:
-        - At the end of the low level adder should have the stable result of sum (24)
-        - Move to next register
+    1. Cycle 1
+        1. Rise edge:
+            - flipflop currently it is 0
+            - Push the flipflop data and A register to Adder (24)
+        2. High level:
+            - Adder receives the number
+            - Due to propogation delay it would take some time
+        3. Falling edge:
+            - Adder is working, due to complex logics and propogation delay
+        4. Low Level:
+            - At the end of the low level adder should have the stable result of sum (24)
+    2. Cycle 2
+        1. Rise edge:
+            - flipflop capture the data from Adder (24)
+            - Control unit select the B reister
+        2. High level:
+        3. Falling edge:
+        4. Low Level:
+            - do nothing
+    
 2. 
-    1. Rise edge:
-        - 24 captured in flipflop
-        - Push flipflop (24) and B register to Adder(34)
-    2. High level:
-        - adding
-    3. Falling edge:
-        - adding
-    4.  Low Level:
-        - At the end of low level adder have result (58)
-        - Move to next register
+    1. Cycle 1
+        1. Rise edge:
+            - 24 captured in flipflop
+            - Push flipflop (24) and B register to Adder(34)
+        2. High level:
+            - adding
+        3. Falling edge:
+            - adding
+        4.  Low Level:
+            - At the end of low level adder have result (58)
+    2. Cycle 2
+        1. Rise edge:
+            - flipflop capture the data from Adder (58)
+            - Control unit select the C reister
+        2. High level:
+        3. Falling edge:
+        4. Low Level:
+            - do nothing
 
 3. 
-    1. Rise edge:
-        - 58 captured in flipflop
-        - Push flipflop (58) and B register to Adder(77)
-    2. High level:
-        - adding
-    3. Falling edge:
-        - adding
-    4.  Low Level:
-        - At the end of low level adder have result (135)
-        - Move to next register
-
-**How can it do both without "Crashing"?**
-
-It seems like a paradox: how can it capture adder output at the same time pushing the values to adder?
-
-This works because of Propagation Delay.
-* The Capture: At the nanosecond the clock rises, the internal "doors" of the flip-flop lock instantly. It has now trapped the $24$.
-* The Push: It takes a few more picoseconds for that trapped $24$ to physically move through the transistors and appear at the output pin (Q).
-* The Safety Gap: By the time that $24$ reaches the Adder and the Adder starts changing its answer (to $24+34$), the flip-flop’s "input door" is already locked tight.
-
-**Adder circuit is not a edge\level trigger**
-
-Unlike latches or Flip-Flops, an adder does not have a "Clock" or "Enable" pin. It doesn't wait for a signal to tell it to start adding.
-- How it works: As soon as you change the inputs ($input$ or $flipflop$), the output ($Sum$) starts changing immediately.
-- The Delay: The only reason the output isn't "instant" is because of Propagation Delay (the physical time it takes electricity to travel through the transistors).
+    1. Cycle 1
+        1. Rise edge:
+            - 58 captured in flipflop
+            - Push flipflop (58) and B register to Adder(77)
+        2. High level:
+            - adding
+        3. Falling edge:
+            - adding
+        4.  Low Level:
+            - At the end of low level adder have result (135)
+    
+    2. Cycle 2
+        1. Rise edge:
+        2. High level:
+        3. Falling edge:
+        4. Low Level:
+            - do nothing
 
 
-By the end of one full cycle, one addition is perfectly finished. This is **Controlled Automation**. Because each step has its own "moment" on the wave, the operations don't collide.
+### What if one task takes longer than another?
 
-our only job is to put the value in A, B, C address and start the machine at the end of 3 cycle assume machine will stop because we don't have any more address, our result is stored in flipflop
+**1. Duty Cycle Adjustments**
+During High level electricity flow into the circuit like adder but the results are not stable (Based on the carry bit electricity flow may change), think of this stage is only to pass the electricity, in low level stage it will get enough time to settle the result
 
+**2. Frequency Divisor**
+If the whole system is too fast, we use a frequency divisor to slow down the "heartbeat" of the CPU so every component can keep up.
+
+**3. The "Wait" State**
+What if the component is *really* slow (like external RAM)?
+In this case, the component sends a "Wait" signal to the CPU. The CPU will stop and "idle" on a specific part of the clock cycle until the component says, "I am done!" Then, the CPU continues to the next stage.
+
+
+#### Note
+* Latches are level triggered
+* D Flip-Flop is edge-triggered
+* The clock frequency is chosen based on the **worst-case scenario** (the slowest task). This ensures that every operation has enough time to finish before the next "Rising Edge" starts a new cycle.
+
+--------------------------------------------------------------------TODO
+### How to calulate clock?
+
+$$\text{Frequency } = \frac{1 \text{ Cycle}}{\text{"ON/High" time} + \text{"Off/Low" time}}$$
+
+1. On Time = 10 ms, Off time = 10 ms
+
+This is a 50% duty clock (ON and OFF time are same)
+
+$$=\frac{1}{10\text{ms} + 10\text{ms}} = \frac{1}{20\text{ms}} = 0.05 Hz$$
+1 cycle for every 0.05 seconds
+
+$$0.05{ ms} \times 1000 \text{ ms per second}  = 50 Hz$$
+
+Convert the time from milliseconds to seconds:
+$$20 \text{ ms} = \frac{20}{1000} \text{ s} = 0.02 \text{ s}$$
+
+Calculate the frequency:
+$$f = \frac{1}{0.02 \text{ s}} = 50 \text{ Hz}$$
+
+2. On Time 10ms , Off Time= 30ms
+
+Find Duty cycle = ON + OFF = total period for 1 cycle
+$$ \text{One cycle time Period} = 10 + 30 = 40$$
+$$\text{Duty cycle } =\frac{ \text{ON time}}{\text{One cycle time Period}}$$
+$$= \frac{10}{40} = \frac{1}{4} = 25%$$
+It is 25% Duty cycle clock
+
+$$\text{Clock Frequency}=\frac{1}{10\text{ms} + 30\text{ms}} = \frac{1}{40\text{ms}} = 0.025$$
+
+Milli second to seconds 
+$$40/1000 = 0.04 \text{ s}$$
+
+$$f = \frac{1}{0.04 \text{ s}} = 25 \text{ Hz}$$
+
+
+$$T_{clk} \geq T_{cq} + T_{\text{Propagation Delay}} + T_{\text{Setup Time}} + T_{\text{Hold Time}}$$
+
+
+
+$T_{cq}$: 1 nanosecond (Time for Flip-Flop to "speak").
+
+$T_{pd}$: 8 nanoseconds (Time for the Adder to calculate the sum).
+
+$T_{su}$: 1 nanosecond (Safety buffer for the next Flip-Flop).
+
+Total $T_{clk}$: $1 + 8 + 1 = \mathbf{10 \text{ nanoseconds}}$.
+
+Max Clock Speed: 
+
+1 nanosecond ($ns$) = $0.000000001$ seconds
+
+$$f = \frac{1}{10 \text{ nanoseconds}} = \frac{1}{10 \times 10^{-9} \text{ seconds}}$$
+
+$$f = \frac{1}{0.00000001} = 100,000,000 \text{ Hz}$$
+$$\frac{100,000,000 \text{ Hz}} {1000\text{ Kilo}} = 100,000 \text{KHz}$$
+$$\frac{100,000 \text{ KHz}} {1000\text{ Mega}} = 100 \text{MHz}$$
+
+
+Important: If you try to run this at 200 MHz ($5 \text{ ns}$ period), the "Rise Edge" will hit while the Adder is still in the middle of calculating. The result? Corrupted data.
+
+---------------------------
 
 ## What is BUS?
 Bus is a common connector, like registers, memory, ALU are linked with BUS
@@ -403,3 +491,20 @@ When the Control Unit decodes the HLT instruction, it enters a special Halt Stat
 * [EPROM](https://youtu.be/BA12Z7gQ4P0) Just look, it is just a bonus, if don't understand leave it and chill
 
 * [Control](https://youtu.be/AwUirxi9eBg) (Just a connection, not much important)
+
+
+
+# Todo
+* $T_{cq}$ (Clock-to-Q Delay): The time it takes for a Flip-Flop to actually push data out its "exit" (Q) after the clock edge hits.
+* $T_{pd}$ (Propagation Delay): The time electricity takes to "ripple" through your Adder or other logic gates.
+* $T_{setup}$ (Setup Time): The "quiet time" the next Flip-Flop needs the data to be stable before the next clock edge.3
+* $T_{skew}$ (Clock Skew): The tiny difference in time it takes for the clock signal to reach different parts of the chip.
+
+$$T_{clk} \geq T_{cq} + T_{pd} + T_{setup}$$
+* Hold Time: This is the opposite of setup.7 You must ensure your logic isn't too fast ($T_{cq} + T_{pd} > T_{hold}$). If it's too fast, the data "blows through" the Flip-Flop before it can lock.
+
+1. How to calculate required High and Low TimeMost digital components (like D-Flip-Flops) have a Minimum Pulse Width (4$t_{w}$) requirement in their datasheet.5 This is the absolute shortest time the clock must stay High or Low to ensure the internal transistors can fully switch.
+
+The Requirements:
+* $T_{high} \geq t_{w(high)}$: The clock must stay High long enough to "trigger" the flip-flop.
+* $T_{low} \geq t_{w(low)}$: The clock must stay Low long enough to "reset" the internal circuitry for the next cycle.
