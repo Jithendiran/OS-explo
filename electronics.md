@@ -27,34 +27,6 @@ The most common way to build an SR Latch is by using two NOR gates in a "cross-c
 
 [D Latch](https://youtu.be/peCh_859q7Q)
 
-## Timings
-
-### Rise time
-* Voltage won't would jump from 0V to 5V instantly, it will increase gradually(think of it like filling a tiny bucket with water)
-
-### Settling Time
-* Settling Time  is the total time it takes for a signal to not just reach its destination, but to stop "shaking" and stay within a steady, usable range.
-
-* While Rise Time tells you how fast a signal jumps from 0 to 1, Settling Time tells you how long you have to wait before that "1" is stable enough to trust.
-
-* Settling Time must be finished before your Setup Time window begins
-
-### Setup Time
-* The minimum amount of time the data signal must be stable before the clock edge arrives.
-
-### Hold Time
-* The minimum amount of time the data signal must remain stable after the clock edge has passed. This ensures the internal latches have fully captured the value.
-
-### Fall time
-* The counterpart to rise time; it is the time taken to transition from high to low
-(think of it like draining a tiny bucket)
-
-### Propagation Delay
-
-Electricity moves at nearly the speed of light, but transistors take time to "charge up" and flip. This tiny pause—often just a few nanoseconds ($10^{-9}$ seconds) is called Propagation Delay.
-
-Why it matters: If you have 100 gates in a row, the delay adds up. You cannot ask for the answer until the electricity has had enough time to "propagate" through all 100 gates.
-
 
 ## Clock
 A clock signal is a voltage that oscillates between 0 (Low) and 1 (High) at a constant frequency. 
@@ -137,6 +109,25 @@ This describes how long the gate stays open.
 
 [D Flip flop](https://youtu.be/YW-_GkUguMM?t=239) [Only see D flip flop section]
 
+
+## Types of circuit
+
+* **Combinational Circuits**
+    - In a combinational circuit, the output depends only on the current inputs. There is no memory of what happened before.
+    - How they work: Think of a simple light switch. When you flip it, the light goes on. If you flip it back, it goes off. It doesn't care how many times you flipped it in the past.
+    - Clock use: They do not use a clock. The output changes as fast as the electricity can travel through the gates (this is called "propagation delay").
+    - Examples: Adders, Multiplexers (MUX), Decoders, and basic Logic Gates (AND, OR, NOT).
+
+
+* **Sequential Circuits**
+    - Sequential circuits are different because they have memory. Their output depends on both the current inputs and the "state" (what happened previously).
+    - Sequential circuits are further split into two types:
+        - Synchronous (Clocked): These use a clock signal to synchronize everything. The memory elements (Flip-Flops) only change their state when the clock "ticks" (the rising or falling edge). This is the "standard" way modern computers work because it prevents errors caused by signals arriving at slightly different times.
+            - Duty cycle is not matter here, 10% or 90% duty cycle both have the single rise edge
+
+        - Asynchronous (Unclocked): These are sequential circuits that do not use a clock. Instead, they change state as soon as the inputs change. While they can be faster, they are much harder to design because they are prone to "race conditions" (where the circuit glitches because one signal beat another by a nanosecond).
+            - For Latches (Level-Triggered): Duty cycle is everything. A latch is "transparent" (open) while the clock is High. If your duty cycle is 70%, the latch stays open for 70% of the time. This is where you actually "design" the duty cycle to control how long data is allowed to flow through
+
 ## Clock explained
 
 To understand why we need a clock, let's look at a simple math problem:
@@ -216,7 +207,7 @@ our only job is to put the value in A, B, C address and start the machine at the
 
 3. Fall edge
     - Double Data Rate (DDR): In DDR memory, data is transferred on both the rising and falling edges to double the speed.
-    - Flip flop can be designed to active on Fall edge (JK flip flop)
+    - Flip flop can be designed to active on Fall edge
 
 4. Low level
     - Many "Reset" pins are active-low, meaning the system stays in a reset state as long as the signal is Low.
@@ -319,6 +310,46 @@ In this case, the component sends a "Wait" signal to the CPU. The CPU will stop 
 * The clock frequency is chosen based on the **worst-case scenario** (the slowest task). This ensures that every operation has enough time to finish before the next "Rising Edge" starts a new cycle.
 
 --------------------------------------------------------------------TODO
+## Timings
+
+Voltage don't change it's state instantly, it will slowly moving to new state like water flow
+
+### Rise time
+* Voltage won't would jump from 0V to 5V instantly, it will increase gradually(think of it like filling a tiny bucket with water)
+* Rise Time ($T_r$): The time it takes a signal to go from 10% to 90% of its final high voltage.
+
+### Settling Time
+* Settling Time  is the total time it takes for a signal to not just reach its destination, but to stop "shaking" and stay within a steady, usable range.
+
+* While Rise Time tells you how fast a signal jumps from 0 to 1, Settling Time tells you how long you have to wait before that "1" is stable enough to trust.
+
+* Settling Time must be finished before your Setup Time window begins
+
+### Setup Time
+* The minimum amount of time the data signal must be stable before the clock edge arrives.
+
+### Hold Time
+* The minimum amount of time the data signal must remain stable after the clock edge has passed. This ensures the internal latches have fully captured the value.
+
+### Fall time
+* The counterpart to rise time; it is the time taken to transition from high to low
+(think of it like draining a tiny bucket)
+* Fall Time ($T_f$): The time it takes a signal to go from 90% to 10% of its high voltage.
+
+### Propagation Delay
+
+Electricity moves at nearly the speed of light, but transistors take time to "charge up" and flip. This tiny pause—often just a few nanoseconds ($10^{-9}$ seconds) is called Propagation Delay.
+
+Why it matters: If you have 100 gates in a row, the delay adds up. You cannot ask for the answer until the electricity has had enough time to "propagate" through all 100 gates.
+* $T_{plh}$ (Propagation Low-to-High): The time delay when the output transitions from Low to High
+* $T_{phl}$ (Propagation High-to-Low): The time delay when the output transitions from High to Low.
+Measurement: Both are measured from the 50% voltage point of the input to the 50% voltage point of the output.
+
+### Contamination Delay
+
+This is similar to Propagation delay
+* It's the minimum time it takes for the output to start changing. Before this time circuit hold the previous values, now it started changing. Propagation Delay is the maximum delay to take for stable the output, end of the Propagation Delay we should get the stable output
+
 ### How to calulate clock?
 
 $$\text{Frequency } = \frac{1 \text{ Cycle}}{\text{"ON/High" time} + \text{"Off/Low" time}}$$
@@ -378,6 +409,21 @@ $$\frac{100,000 \text{ KHz}} {1000\text{ Mega}} = 100 \text{MHz}$$
 
 
 Important: If you try to run this at 200 MHz ($5 \text{ ns}$ period), the "Rise Edge" will hit while the Adder is still in the middle of calculating. The result? Corrupted data.
+
+### The speed of that clock
+
+The speed of that clock is actually dictated by the combinational circuits sitting between them.
+
+* Sequential Circuits : These are the flip-flops that hold the data. They only  change state when the clock ticks.
+
+* Combinational Circuits : This is the logic (adders, multipliers) that sits between the flip-flops. The data has to "run" through this logic before the next clock tick arrives.
+
+The maximum clock frequency $f_{max}$ is limited by the longest path a signal must travel through combinational logic between two sequential elements.
+$$T_{clk} \geq T_{cq} + T_{logic} + T_{setup}$$
+
+1. $T_{cq}$ (Clock-to-Q): The time it takes for a flip-flop to output data after the clock hits.
+2. $T_{logic}$ (Combinational Delay): The time the data spends "calculating" through the gates (AND, OR, etc.). This is usually the bottleneck.
+3. $T_{setup}$ (Setup Time): The "buffer" time the next flip-flop needs to have the data stable before the next clock edge.
 
 ---------------------------
 
@@ -508,3 +554,32 @@ $$T_{clk} \geq T_{cq} + T_{pd} + T_{setup}$$
 The Requirements:
 * $T_{high} \geq t_{w(high)}$: The clock must stay High long enough to "trigger" the flip-flop.
 * $T_{low} \geq t_{w(low)}$: The clock must stay Low long enough to "reset" the internal circuitry for the next cycle.
+
+### Option 1: Increase the Clock Timer (Slow down the Clock)
+
+This is the "easiest" fix. If your adder takes  but your clock cycle is only , you just change the clock to .
+
+* **Pros:** Very simple to implement. You don't have to change any logic or code.
+* **Cons:** **It slows down everything.** Even the fast parts of your chip (like a simple gate that only takes ) are now forced to wait  for the next edge. Your overall "Megahertz" (MHz) rating drops.
+
+
+### Option 2: Give it an "Empty" Clock (Multi-Cycle Path)
+
+In professional digital design, we call this a **Multi-Cycle Path**. You keep the clock fast (e.g., ), but you tell the system: *"Hey, this specific adder is slow; don't look at its output until the 2nd or 3rd clock edge."*
+
+* **Pros:** You keep your high clock speed (MHz) for the rest of the chip.
+* **Cons:** * **Complexity:** You must add "Enable" signals to your flip-flops so they don't capture the "garbage" data during the first clock edge.
+* **Throughput:** You can't start a new addition every single cycle; you have to wait for the adder to finish before giving it new numbers.
+
+
+### Which one is better?
+
+It depends on how often you use that adder:
+
+| If the Adder is... | Best Solution | Why? |
+| --- | --- | --- |
+| **Used in every single step** (like the PC incrementer) | **Slower Clock** or **Pipeline it** | If everything depends on it, a fast clock doesn't help much if you're always waiting. |
+| **A rare, heavy task** (like a complex 64-bit Multiply) | **Multi-Cycle Path** | Keep the CPU clock fast for simple tasks; only slow down when that specific heavy math is needed. |
+| **Extremely slow** | **Pipelining** | (Pro Level) Break the adder into two smaller adders with a flip-flop in the middle. This allows you to keep a fast clock *and* start a new addition every cycle. |
+
+> **The "PC Overclocking" Fact:** When people "overclock" their computers, they are doing the opposite—they are making the clock faster and faster until the adders can't finish in time. Eventually, the math fails, and the computer blue-screens!
