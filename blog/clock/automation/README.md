@@ -123,6 +123,10 @@ Instead of a human pressing a button, we use a Clock Signal (a continuous square
 * **Rising Edge**: The Flip-Flop "grabs" the finished result from the Adder and saves it. Simultaneously, the system moves to the next number in your list.
 * High/Fall/Low Levels: The system prepares for the next round of addition.
 
+**The Brain: The Control Unit**
+
+In a real CPU, there is a special part called the Control Unit. It acts like a conductor in an orchestra. Using an internal counter, it keeps track of the clock cycles and tells every part of the computer exactly when to "push" data and when to "save" it.
+
 >**Adder circuit is not a edge\level trigger**   
 > Unlike latches or Flip-Flops, an adder does not have a "Clock" pin. It doesn't wait for a signal to tell it to start adding. It is always on
 >- How it works: As soon as you change the inputs ($input$ or $flipflop$), the output ($Sum$) starts changing immediately.

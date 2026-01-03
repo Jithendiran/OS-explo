@@ -24,6 +24,8 @@ The 8086 CPU is split into two major units that work together to speed up proces
 
     - Role: Executes the instructions.
     - Responsibilities: Instruction Decode (reading from the queue), executing logic/math using the $\text{ALU}$, accessing and manipulating the internal Registers ($\text{AX, BX}$, etc.) and Flags, and managing control flow (like $\text{JMP}$ or $\text{INTR}$ checks).
+        - The Control Unit (CU):  It decodes instructions and sends the Load/Enable signals to all other modules.
+        - The ALU (Arithmetic Logic Unit): The calculator. It performs additions, subtractions, and logical operations (AND, OR, XOR).
 
     Pins the $\text{EU}$ Directly Checks/Accesses (via internal logic)
     - $\mathbf{\text{NMI}}$, $\mathbf{\text{INTR}}$, $\mathbf{\text{TEST}'}$
