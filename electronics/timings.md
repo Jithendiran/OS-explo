@@ -312,6 +312,18 @@ Actual Low Time: $1000 \times (1 - 0.20) = 1000 \times (0.80) = \mathbf{800\text
 
 If your flip-flop's datasheet says $t_{w(min, high)} = 250\text{ ps}$, your circuit will fail because 200ps is not enough time for the Slave to operate, even though the total 1GHz frequency might be fine.
 
+#### Violation check
+1. The "Setup" Race (Longest Path)
+
+    We want to know the slowest possible time the data takes to arrive to make sure the clock doesn't beat it.
+
+    $t_{pcq(max)} + t_{logic(max)} + t_{setup}$
+
+2. The "Hold" Race (Shortest Path)
+
+    We want to know the fastest possible time the data could change. We want to make sure the "new" data doesn't arrive so fast that it crashes into the "old" data while the Flip-Flop is still trying to lock its doors.
+
+    $$t_{pcq(min)} + t_{logic(min)} \geq t_{h}$$
 
 #### Choosing the right Duty Cycle:
 
@@ -453,6 +465,15 @@ $V_{CC} = 4.5\text{V}$ At 25&deg;C
 4. The Clock Frequency ($f_{max}$)
 - $f_{clock}$ (Max) = $18\text{ MHz}$ rating is the fastest the chip can toggle internally.
 
+* FFP1 
+    - FFP1 = ($t_{pd}$): $48\text{ ns}$
+    - Duty cycle: $T_{high}$ only matter here because $T_{low}$ was taken in last cycle
+    - Constraint: $48\text{ ns} > 24\text{ ns}$ (PASS)
+* FFP2
+    - FFP2 = ($t_{su}$): $30\text{ ns}$
+    - Duty cycle: $T_{low}$ only matter here because $T_{high}$ will take next cycle
+    - Constraint: $30\text{ ns} > 24\text{ ns}$ (PASS)
+
 ### Adder
 
 [Data from Data sheet](https://www.ti.com/lit/ds/symlink/cd74hc283.pdf)
@@ -461,7 +482,7 @@ $V_{CC} = 4.5\text{V}$ At 25&deg;C
 
 HC type
 This is a 4 bit adder we have to combine 2
-1. DC Thresholds (Correct)
+1. DC Thresholds
 - $V_{IH} = 3.15\text{V}$
 - $V_{IL} = 1.35\text{V}$
 - $V_{OH} = 4.4\text{V}$ (at $I_{OH} = -20\mu\text{A}$)
@@ -479,53 +500,115 @@ tPLH,tPHL at CL = 50 pF
 - $t_{TLH},t_{THL} = 15ns $
 
 
-Calculation
+This is 4 bit adder, but need 8 bit adder, so cascade (combine 2 chips ) the 2 chips
+Carry Out ($C_{OUT}$) of the first 4-bit adder becomes the Carry In ($C_{IN}$) of the second 4-bit adder
 
-FFP1 = ($t_{pd}$): $48\text{ ns}$
+#### Adder time line
+1. The "Starting Gun" ($0\text{ ns}$)
 
-I think FFP1 duty cycle only for slave, bcz master sampled in last low cycle
+    Both chips receive their $A$ and $B$ inputs at the same time.
 
-Adder
+    * Adder 1 starts calculating using its $A, B$ and its $C_{IN}$ (which is usually tied to Ground/0).
+    * Adder 2 starts calculating using its $A, B$ and the old carry from the previous operation.
 
-FFP2 = ($t_{su}$): $30\text{ ns}$
+2. Adder 1 Finish Line ($39\text{ ns}$ and $42\text{ ns}$)
 
-$$f = 1 / 78\text{ns} = \mathbf{12.8\text{ MHz}}$$
-This clr and clk has same frequency
+    * At $39\text{ ns}$: The Carry Out ($C_{OUT}$) is ready. This is the most important signal because it "wakes up" the second half of the math.
+    * At $42\text{ ns}$: The first 4 bits ($S_0–S_3$) are stable. it only takes $42\text{ ns}$ (not $46\text{ ns}$) because the $C_{IN}$ for the first chip was already stable at $0\text{ ns}$. It didn't have to wait for an external signal to arrive late.
 
-check duty cycle
+3. Adder 2 Finish Line ($85\text{ ns}$)
 
---
-
-#### Phase 1: Preparing at Flip-Flop 1 (The Starting Line)
-
-Before the clock even "ticks," the data must be ready.
-
-1. $V_{IH}$ (Input High Voltage): The data at the input of FF1 must rise above the $V_{IH}$ threshold to be recognized as a "1".
-2. $T_{setup}$ ($t_s$): The data must be stable at $V_{IH}$ for at least $t_s$ nanoseconds before the clock edge hits. If it changes during this window, the transistors inside won't settle, leading to Metastability.
-3. Clock Arrival & $t_{skew}$: The clock signal travels through the wires. If the wire to FF1 is shorter than the wire to FF2, the difference in arrival time is Clock Skew.
-4. $V_{th}$ (Threshold Voltage): As the clock signal rises, it hits the $V_{th}$ of the internal clock-buffer transistors. This is the exact "moment" the FF captures the data.
-
-#### Phase 2: Processing (The Journey through the Adder)
-
-The clock has hit. Now the signal "exits" FF1 and travels through the Adder.
-
-5. $t_{pcq}$ (Clock-to-Q Propagation): The time from the clock's 50% point to the output $Q$ reaching its 50% point. This is the "Exit Fee" of the first flip-flop.
-6. $t_{cd}$ (Contamination Delay): This is the "Best Case" speed. It's the absolute minimum time before the output starts to move. We use this to check for Hold violations.violations.
-7. $t_{pd}$ (Logic Propagation): The signal now enters the Adder. It ripples through the gates. This is the "Processing Tax."
-8. $t_r$ and $t_f$ (Rise and Fall): As the signal leaves the Adder, it doesn't "jump." It follows an RC curve. The Rise Time is measured from 10% to 90% of the voltage.
-9. Settling Time: After the rise, the signal might "ring" (oscillate) slightly due to inductance. Settling time is how long it takes to stay stable within a small margin (e.g., 2%).
+    * The Wait: Adder 2 was "working" from $0\text{ ns}$ to $39\text{ ns}$, but it was working with the wrong carry information.
+    * The Update: At $39\text{ ns}$, the correct carry finally arrives at the $C_{IN}$ pin of Adder 2.
+    * The Final Push: The chip now takes its $46\text{ ns}$ ($C_{IN} \to S_n$) propagation delay to ripple that new information through its internal gates to the final outputs. (it depends on an external carry , so it is 46 not 42)
+    * Total: $39\text{ ns} \text{ (Wait)} + 46\text{ ns} \text{ (Process)} = \mathbf{85\text{ ns}}$.
 
 
-#### Phase 3: Arriving at Flip-Flop 2 (The Finish Line)
+#### Cycle
+$$T_{total} = t_{pcq(FF1)} + t_{pd(logic)} + t_{su(FF2)}$$
+$$T_{total} = 48\text{ ns} + 85\text{ ns}  + 30\text{ ns} = \mathbf{163\text{ ns}}$$
 
-10. $T_{setup}$ at FF2: The data coming out of the Adder must arrive at FF2 and be stable for $t_s$ before the next clock edge hits.
-* **Max Frequency Calculation:**  $T_{period} \geq t_{pcq} + t_{pd\_adder} + t_s$.
+$$f_{max} = \frac{1}{163\text{ ns}} \approx \mathbf{6.13\text{ MHz}}$$
+
+$6.13 \text{ MHz} \le 18 \text{ MHz}$ (PASS)
+
+This clr and clk has same frequency, if clear has different have to take which has max value
+
+**Duty cycle**
+
+Using 50% duty cycle
+* Actual $T_{high}$: $81.5\text{ ns}$ (Is $81.5 > 24$? PASS)
+* Actual $T_{low}$: $81.5\text{ ns}$ (Is $81.5 > 24$? PASS)
+* Setup Time Voilation Check for FFP1  
+
+    This is same as frequency we calculated
+* Hold Time Voilation Check for FFP2
+
+    The time it takes for data to change at the input of FF2 must be greater than the required Hold Time.
+    
+
+    $$t_{pcq(min)} + t_{logic(min)} \geq t_{h} + t_{skew}$$
+
+    - $t_{pcq(min)}$: Usually around $10\text{--}20\text{ ns}$ (if not in datasheet, engineers often assume a small fraction of $t_{pd}$).
+    - $t_{logic(min)}$: The shortest path through the adder (e.g., $A_0 \to S_0$ for Adder 1). From your datasheet, that is roughly $32\text{ ns}$.
+    - $t_{h}$: Your datasheet says $0\text{ ns}$.
+
+    $$\text{FFP1 } t_{pcq(min)} + \text{Adder } t_{logic(min)} \geq \text{FFP2 }t_{hold} + 0\text{ skew}$$
+    - $t_{pcq}$ (Fastest): Let's assume the FF reacts at its fastest, maybe $20\text{ ns}$.
+    - $t_{logic}$ (Fastest): The carry doesn't have to ripple for the first bit ($S_0$). The delay from $A_0 \to S_0$ is only $32\text{ ns}$.
+
+    $$20\text{ ns (est.)} + 32\text{ ns} \geq 0\text{ ns} + 0\text{ ns (assumed skew)}$$
+    $$52\text{ ns} \geq 0\text{ ns} \implies \mathbf{PASS}$$
+
+#### The Life Cycle of a Bit: Timing in the 8-Bit Adder
+
+##### Phase 1: Preparation at FFP1 (The Starting Line)
+
+Before the clock "ticks," we must ensure the data is locked and loaded.
+
+* $V_{IH} / V_{IL}$ (Input Thresholds): The raw electrical signal from your data source must reach $3.15\text{V}$ (for a High) or drop below $1.35\text{V}$ (for a Low) to be understood by the CMOS transistors.
+
+* $T_{setup}$ ($t_{s1}$): Data must sit perfectly still for $30\text{ ns}$ before the clock edge. If it flickers here, the internal Master Latch might get stuck halfway between 0 and 1 (Metastability).
+
+* Clock Arrival & $t_{skew}$: The clock signal travels through the wires. If the wire to FFP1 is shorter than the wire to FFP2, the difference in arrival time is Clock Skew.
+
+**Clock hit**
+
+*  $V_{th}$ (Threshold Voltage): As the clock signal rises, it hits the $V_{th}$ of the internal clock-buffer transistors. This is the exact "moment" the FF captures the data. (usually defined as $50\% V_{DD}$)
+
+* The Commitment ($T_{hold}$): Once the clock hits FFP1, the data output must stay stable for $0\text{ ns}$.
+
+* Pulse Width ($T_{high}$): Finally, the clock must stay high for at least $24\text{ ns}$ each. This ensures the internal Master and Slave doors have enough time to physically close and open.
+
+##### Phase 2: Processing (The Journey through the Adder)
+
+Now the signal "exits" FFP1 and travels through the Adder. (after 48ns)
+* $t_{pcq}$ (Clock-to-Q): It takes $48\text{ ns}$ for the "Slave Latch" inside FFP1 to push the captured bit out to the $Q$ pin. This is your "Exit Fee."
+
+* $t_{pd\_logic}$ (The Ripple): The signal hits the 8-bit Adder chain. 
+    - It spends $39\text{ ns}$ in Adder 1 to calculate the Carry.
+    - It spends $46\text{ ns}$ in Adder 2 to finalize the Sum.
+    - Total Processing Tax: $85\text{ ns}$.
+
+* Slew Rate & $t_{r}/t_{f}$: The signal doesn't look like a square; it looks like a ramp. It takes time to charge the "Bucket" (Capacitance) of the wires and the next gate.
+
+* Settling Time: The signal might oscillate at the top. We wait for it to stop "ringing" so it is clean for the next stage.
 
 
-11. $T_{hold}$ ($t_h$): After the clock edge hits FF2, the data from the Adder must stay stable for $t_h$. If the Adder is "too fast" and sends the next bit of data before $t_h$ is over, you get a Hold Violation.
+##### Phase 3: Arriving at Flip-Flop 2 (The Finish Line)
 
-----
+The signal has survived the Adder. Now it must be captured by the next Flip-Flop.
 
+* The Deadline ($T_{setup}$): The sum from the adder must arrive at FFP2's input at least $30\text{ ns}$ before the next clock edge.
+    - Max Frequency Limit: $T_{period} \geq 48\text{ns} (t_{pcq}) + 85\text{ns} (t_{pd}) + 30\text{ns} (t_s) = \mathbf{163\text{ ns}}$. (Setup Violation)
+
+* Pulse Width ($T_{low}$): Finally, the clock must stay Low for at least $24\text{ ns}$ each. This ensures the internal Master and Slave doors have enough time to physically open and close.
+
+* The Commitment ($T_{hold}$): Once the clock hits FFP2, the Adder's output must stay stable for $0\text{ ns}$.
+
+**Remember that as temperature increases or $V_{CC}$ decreases, these nanosecond values will increase, slowing down your $f_{max}$ further.**
+
+### Cycle calculation
 
 $$\text{Frequency } = \frac{1 \text{ Cycle}}{\text{"ON/High" time} + \text{"Off/Low" time}}$$
 
@@ -558,29 +641,3 @@ Milli second to seconds
 $$40/1000 = 0.04 \text{ s}$$
 
 $$f = \frac{1}{0.04 \text{ s}} = 25 \text{ Hz}$$
-
-
-$$T_{clk} \geq T_{cq} + T_{\text{Propagation Delay}} + T_{\text{Setup Time}} + T_{\text{Hold Time}}$$
-
-
-
-$T_{cq}$: 1 nanosecond (Time for Flip-Flop to "speak").
-
-$T_{pd}$: 8 nanoseconds (Time for the Adder to calculate the sum).
-
-$T_{su}$: 1 nanosecond (Safety buffer for the next Flip-Flop).
-
-Total $T_{clk}$: $1 + 8 + 1 = \mathbf{10 \text{ nanoseconds}}$.
-
-Max Clock Speed: 
-
-1 nanosecond ($ns$) = $0.000000001$ seconds
-
-$$f = \frac{1}{10 \text{ nanoseconds}} = \frac{1}{10 \times 10^{-9} \text{ seconds}}$$
-
-$$f = \frac{1}{0.00000001} = 100,000,000 \text{ Hz}$$
-$$\frac{100,000,000 \text{ Hz}} {1000\text{ Kilo}} = 100,000 \text{KHz}$$
-$$\frac{100,000 \text{ KHz}} {1000\text{ Mega}} = 100 \text{MHz}$$
-
-
-Important: If you try to run this at 200 MHz ($5 \text{ ns}$ period), the "Rise Edge" will hit while the Adder is still in the middle of calculating. The result? Corrupted data.
