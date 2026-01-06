@@ -59,7 +59,7 @@ The problem is that the circuit stays "open" for too long. To get the correct an
 **Understanding the Button Press (scenerios)**
 
 To see how the timing works, let's imagine you press the button three different times:
-1. **First pres**s: You hold it for 1 second, then let go for 2 seconds.
+1. **First press**: You hold it for 1 second, then let go for 2 seconds.
 2. **Second press**: You hold it for 3 seconds, then let go for 1 second.
 3. **Third press**: You hold it for 0.5 seconds.
 
