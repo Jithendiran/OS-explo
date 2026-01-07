@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --wire-off: #1e293b;
+            --wire-on: #22c55e;
+            --gate-border: #334155;
+            --text: #94a3b8;
+        }
+
+        body {
+            background: var(--bg);
+            color: #f8fafc;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            /* Prevents stray scrolls */
+        }
+
+        .circuit-container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 100px;
+            padding-top: 50px;
+        }
+
+        .circuit-row {
+            position: relative;
+            width: 100%;
+            height: 120px;
+        }
+
+        .wire {
+            position: absolute;
+            background: var(--wire-off);
+            height: 6px;
+            border-radius: 3px;
+            animation: global-flow 5s infinite step-end;
+        }
+
+        .and-gate {
+            position: absolute;
+            width: 80px;
+            height: 60px;
+            background: var(--wire-off);
+            border: 2px solid var(--gate-border);
+            border-radius: 0 30px 30px 0;
+            top: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--text);
+            z-index: 10;
+        }
+
+        /* Simultaneous Global Cutoff Logic */
+        @keyframes global-flow {
+
+            0%,
+            80% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+
+            100% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+        }
+
+        /* Stage 1: Input Wires (Active 20% to 80%) */
+        .t1 {
+            animation-name: stage1;
+        }
+
+        @keyframes stage1 {
+
+            0%,
+            19.9% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+
+            20%,
+            80% {
+                background: var(--wire-on);
+                box-shadow: 0 0 15px var(--wire-on);
+            }
+
+            80.1%,
+            100% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+        }
+
+        /* Stage 2: Intermediate Wires (Active 40% to 80%) */
+        .t2 {
+            animation-name: stage2;
+        }
+
+        @keyframes stage2 {
+
+            0%,
+            39.9% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+
+            40%,
+            80% {
+                background: var(--wire-on);
+                box-shadow: 0 0 15px var(--wire-on);
+            }
+
+            80.1%,
+            100% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+        }
+
+        /* Stage 3: Output Wires (Active 60% to 80%) */
+        .t3 {
+            animation-name: stage3;
+        }
+
+        @keyframes stage3 {
+
+            0%,
+            59.9% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+
+            60%,
+            80% {
+                background: var(--wire-on);
+                box-shadow: 0 0 15px var(--wire-on);
+            }
+
+            80.1%,
+            100% {
+                background: var(--wire-off);
+                box-shadow: none;
+            }
+        }
+
+        .label {
+            position: absolute;
+            top: -30px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="circuit-container">
+        <div class="circuit-row">
+            <div class="label">1. Single AND Gate</div>
+            <div class="wire t1" style="width: 30%; top: 45px; left: 0;"></div>
+            <div class="wire t1" style="width: 30%; top: 75px; left: 0;"></div>
+            <div class="and-gate" style="left: 30%;">AND</div>
+            <div class="wire t2" style="width: 50%; top: 60px; left: calc(30% + 80px);"></div>
+        </div>
+
+        <div class="circuit-row">
+            <div class="label">2. Consider this as complex IC</div>
+            <div class="wire t1" style="width: 15%; top: 45px; left: 0;"></div>
+            <div class="wire t1" style="width: 15%; top: 75px; left: 0;"></div>
+
+            <div class="and-gate" style="left: 15%;">AND</div>
+
+            <div class="wire t2" style="width: 5%; top: 60px; left: calc(15% + 80px);"></div>
+            <div class="wire t2" style="width: 4px; height: 36px; top: 42px; left: calc(20% + 80px);"></div>
+            <div class="wire t2" style="width: 10%; top: 42px; left: calc(20% + 80px);"></div>
+            <div class="wire t2" style="width: 10%; top: 78px; left: calc(20% + 80px);"></div>
+
+            <div class="and-gate" style="left: calc(30% + 80px);">AND</div>
+
+            <div class="wire t3" style="width: 40%; top: 60px; left: calc(30% + 160px);"></div>
+        </div>
+    </div>
+</body>
+
+</html>
