@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --wire-on: #22c55e;
+            --wire-off: #334155;
+            --grid: #1e293b;
+            --speed: 3s;
+            --wave-w: 400px;
+            --circuit-color: #94a3b8;
+        }
+
+        body {
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .oscilloscope-box {
+            width: 900px;
+            padding: 30px;
+            background-color: var(--bg);
+            background-image:
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 50px 50px;
+            border: 2px solid #334155;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            height: 60px;
+        }
+
+        .label {
+            color: #64748b;
+            width: 110px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .circuit-diagram {
+            width: 180px;
+            height: 100%;
+            margin-right: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .circuit-svg {
+            stroke: var(--circuit-color);
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .wave-view {
+            flex-grow: 1;
+            height: 40px;
+            overflow: hidden;
+            position: relative;
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid var(--grid);
+        }
+
+        .wave-lane {
+            width: 100%;
+            height: 100%;
+            background-repeat: repeat-x;
+            background-size: var(--wave-w) 100%;
+            animation: slide var(--speed) linear infinite;
+            filter: drop-shadow(0 0 5px var(--wire-on));
+        }
+
+        @keyframes slide {
+            from { background-position: 0 0; }
+            to { background-position: calc(-1 * var(--wave-w)) 0; }
+        }
+
+        /* Wave Data */
+        .clock { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="40"><path d="M 0 35 V 5 H 50 V 35 H 100 V 5 H 150 V 35 H 200 V 5 H 250 V 35 H 300 V 5 H 350 V 35 H 400" stroke="%2322c55e" stroke-width="3" fill="none"/></svg>'); }
+        .rise-edge { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="40"><path d="M 0 35 V 5 H 5 V 35 H 100 V 5 H 105 V 35 H 200 V 5 H 205 V 35 H 300 V 5 H 305 V 35 H 400" stroke="%2322c55e" stroke-width="3" fill="none"/></svg>'); }
+        .fall-edge { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="40"><path d="M 0 35 H 50 V 5 H 55 V 35 H 150 V 5 H 155 V 35 H 250 V 5 H 255 V 35 H 350 V 5 H 355 V 35 H 400" stroke="%2322c55e" stroke-width="3" fill="none"/></svg>'); }
+        .high-lvl { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="40"><path d="M 0 5 H 50 M 100 5 H 150 M 200 5 H 250 M 300 5 H 350" stroke="%2322c55e" stroke-width="3" fill="none"/></svg>'); }
+        .low-lvl { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="40"><path d="M 50 35 H 100 M 150 35 H 200 M 250 35 H 300 M 350 35 H 400" stroke="%2322c55e" stroke-width="3" fill="none"/></svg>'); }
+    </style>
+</head>
+<body>
+
+<div class="oscilloscope-box">
+    <div class="row">
+        <div class="label">Clock</div>
+        <div class="circuit-diagram">
+            <svg class="circuit-svg" width="140" height="40">
+                <path d="M 10 20 H 130" />
+                <circle cx="10" cy="20" r="3" fill="var(--circuit-color)" stroke="none"/>
+            </svg>
+        </div>
+        <div class="wave-view"><div class="wave-lane clock"></div></div>
+    </div>
+
+    <div class="row">
+        <div class="label">Rise Edge</div>
+        <div class="circuit-diagram">
+            <svg class="circuit-svg" width="160" height="60" viewBox="0 0 160 60">
+                <circle cx="20" cy="30" r="2" fill="var(--circuit-color)" stroke="none"/>
+                <path d="M 0 30 H 20 M 20 15 V 45" /> 
+                <path d="M 20 15 H 85" />
+                <path d="M 20 45 H 45" />
+                <path d="M 45 38 L 60 45 L 45 52 Z" /> <circle cx="64" cy="45" r="3" /> <path d="M 67 45 H 85" />
+                <path d="M 85 10 H 105 A 20 20 0 0 1 105 50 H 85 V 10" />
+                <path d="M 125 30 H 150" />
+            </svg>
+        </div>
+        <div class="wave-view"><div class="wave-lane rise-edge"></div></div>
+    </div>
+
+    <div class="row">
+        <div class="label">Fall Edge</div>
+       <div class="circuit-diagram">
+            <svg class="circuit-svg" width="160" height="60" viewBox="0 0 160 60">
+                <circle cx="20" cy="30" r="2" fill="var(--circuit-color)" stroke="none"/>
+                <path d="M 0 30 H 20 M 20 15 V 45" /> 
+                
+                <path d="M 20 15 H 35" />
+                <path d="M 35 8 L 50 15 L 35 22 Z" /> 
+                <circle cx="54" cy="15" r="3" />
+                <path d="M 57 15 H 85" />
+                
+                <path d="M 20 45 H 35" />
+                <path d="M 35 38 L 50 45 L 35 52 Z" /> <path d="M 50 45 H 60 L 75 45 L 60 52 V 38 Z" /> <path d="M 75 45 H 85" />
+                
+                <path d="M 85 10 H 105 A 20 20 0 0 1 105 50 H 85 V 10" />
+                <path d="M 125 30 H 150" />
+            </svg>
+        </div>
+        <div class="wave-view"><div class="wave-lane fall-edge"></div></div>
+    </div>
+
+    <div class="row">
+        <div class="label">High Lvl</div>
+        <div class="circuit-diagram">
+            <svg class="circuit-svg" width="140" height="40">
+                <path d="M 10 20 H 50" />
+                <path d="M 50 10 L 70 20 L 50 30 Z" />
+                <path d="M 70 20 H 130" />
+            </svg>
+        </div>
+        <div class="wave-view"><div class="wave-lane high-lvl"></div></div>
+    </div>
+
+    <div class="row">
+        <div class="label">Low Lvl</div>
+        <div class="circuit-diagram">
+            <svg class="circuit-svg" width="140" height="40">
+                <path d="M 10 20 H 50" />
+                <path d="M 50 10 L 65 20 L 50 30 Z" />
+                <circle cx="69" cy="20" r="3" />
+                <path d="M 72 20 H 130" />
+            </svg>
+        </div>
+        <div class="wave-view"><div class="wave-lane low-lvl"></div></div>
+    </div>
+</div>
+
+</body>
+</html>
