@@ -1,26 +1,88 @@
-To build the "building" of device communication from the "bricks" of timings, we have to move from a point-to-point connection (like your Adder) to a Shared Bus connection.
+https://www.westerndesigncenter.com/wdc/documentation/w65c02s.pdf
 
-In your Adder example, the wire belonged only to the Adder. In a System, many devices share the same "hallway" (The Bus).
+Let's take 2MHz
 
-1. The Tri-State Buffer (The "Valve")
-    We seen a wire is either 0 or 1. But if two devices are connected to one wire and Device A sends a '1' while Device B sends a '0', the circuit shorts out.
-    * High-Z (High Impedance)
-        - third state where the transistor "unplugs" itself from the wire.
-        -  How long does it take for a pin to go from "Active" to "Disconnected"? (This is called $t_{HZ}$ and $t_{LZ}$).
-2. The Bus Cycle (The "Handshake")
-    Now that we have valves, how do two chips agree on who talks? We move from $T_{total} = t_{pcq} + t_{pd} + t_{su}$ to a Bus Read Cycle.
-    Your next study goal: Look at a timing diagram for a Generic Asynchronous Read.
-    - Address Valid: The CPU puts an address on the wires.
-    - The Wait ($t_{AA}$): Address Access Time. The memory chip needs time to "find" the data in its internal grid.
-    - Data Valid: The moment the memory chip finally pushes data onto the bus.
+Min = This is the shortest time the CPU needs to stay "still" for things to work.
+Max = This is the slowest the CPU will be.
+Usually ignore $Typ$ if given in the datasheet for calculation
 
-3. Synchronous vs. Asynchronous
-    You calculated a clock speed of 6.13 MHz. This assumes the CPU and Adder are perfectly in sync. But what if the device you are talking to is slow or doesn't have a clock?
-    * Synchronous (SPI/Memory): Uses your $t_{su}$ and $t_h$ logic.
-    * Asynchronous (UART/RS232): There is no shared clock! How do they agree on speed? (This introduces the concept of Baud Rate and Sampling).
+## Mem read
 
-Start with The Memory Read Cycle. It is the most direct evolution of your 8-Bit Adder project.
-The Experiment: Instead of FF1 -> Adder -> FF2, imagine: CPU -> Address Bus -> SRAM Chip -> Data Bus -> CPU
+Address start flowing in the address BUS from fall edge, Data read from the memory at fall edge 
+
+$t_{ADS}$ (max) = Cpu need 150 ns to put the stable address in address bus, after 150ns address is stable
+
+$t_{ACC}$ (min) = from the clock rise edge, MPU expect data within 290ns
+
+$t_{AH}$ (min) = Data read from memory happen at fall edge, so address must hold for atleast 10ns
+
+Data must be stable before the next fall edge
+
+$t_{DSR}$ (min) = Before fall clock edge arrive data must be stable for atleast 60ns
+
+$t_{DHR}$ (min) = Data must be hold for atleast 10ns after the fall edge, for MPU to access latch the data properly
+
+Both address and data operations are happen at the fall edge, address actually start setup after previous cycle data read exactly after 10ns
 
 
-https://web.mit.edu/6.111/www/s2004/LECTURES/l7.pdf
+| Time (ns) | Event / State | Logic Phase |
+| --- | --- | --- |
+| **0** | **50% of Falling Edge** | **Cycle Starts ($T_f$)** |
+| 1 – 2 | Finish Falling to Low | Low edge ($T_f$). 3/5 sec in fall time| 
+| 3 – 247 | **Low Level** | Low  level ($T_{PWL}$)|
+| 248 | Start of Rising Edge | Transition, 2/5 sec in rise time (248, 249)|
+| **250** | **50% of Rising Edge** | **Mid-cycle ($T_{r}$)** |
+| 251 – 252 | Finish Rising to Low | High edge ($T_r$) 3/5 sec in rise time (250, 251, 252)|
+| 253 – 498 | **High Level** | High level ($T_{PWH}$)|
+| 499 | Start of Falling Edge | Transition |
+| **500** | **50% of Falling Edge** | **Next Cycle Starts** |
+
+Clock cycle start
+* t = 0 - 5 (fall edge)
+    - Start Data read operation (MPU $\leftarrow$ Memory)
+* t = 10ns (Hold time ends)
+    - Now previous Data is guarenteed to be readed by MPU
+
+---------------------------- start
+
+* t = 10 + 150ns = 160ns (Actual start)
+    - tADS completed
+    - MPU puts the address to be read on the BUS
+    - It will take 150 ns for stabilization 
+* t = 161 - 249ns 
+    - Address is driving
+    - 90 ns waiting time for MPU, but RAM can utilize
+    - Tacc 90 ns completed (ROM/RAM working)
+
+* t = 250 (Rise edge)
+    - Address is driving
+    - Tacc 91 ns completed (ROM/RAM working)
+    - put the data to the data bus 
+* t = 250 + (tacc 290 - 91 = 199) = 449ns
+    - Tacc completed
+    - Memory chip (ROM/RAM working) start driving the data
+* t = 450 
+    - TDSR time start (t = 440 - 500 = 60 ns)
+* t = 500ns (fall edge)
+    - MPU start capturing the data
+
+(Next cycle)
+* t = 510ns
+    - Data read completed
+
+### Calc
+
+* Address should be valid for 161 - 510 ns
+* Memory unit available time = (start of DSR)440 - (start of Tacc)160 = 280ns 
+approximately Memory unit have 290ns time, with in this time period it has to provide the data
+    - If memory unit need more time disable `RDY` pin
+
+here i have one doubt
+RAM get the actual address in middle of low level
+same data started  writing in the middle of high level
+how it know that previous operation is completed it can start from ths time?
+
+for modern DRAM
+- Look up "SRAM vs DRAM": Learn why modern RAM needs to be "Refreshed" every few milliseconds.
+- Look up "SDRAM State Machine": See how a "Command" (Activate, Read, Precharge) replaces a simple "Address."
+- Explore the 65816 or 68000: These are "next step" CPUs that use Bus Multiplexing (sharing wires), which is a bridge to modern tech.
