@@ -408,12 +408,12 @@ OCW3 is used to inspect the "hidden" registers (IRR and ISR) or change special m
 This is the most common use for OCW3. Since the IRR and ISR are internal, the CPU cannot "see" them directly. You must "prime" the PIC first.
 
 * **To read the IRR (Interrupt Request Register):**
-1. Send **** () to Port .
+1. Send **0x0A (00001010b)** to Port  (0x20).
 2. Immediately perform `IN AL, 0x20`. `AL` now contains the IRR.
 
 
 * **To read the ISR (In-Service Register):**
-1. Send **** () to Port .
+1. Send **0x0B (00001011b)** () to Port 0x20.
 2. Immediately perform `IN AL, 0x20`. `AL` now contains the ISR.
 
 
@@ -460,3 +460,5 @@ The PIC's internal logic uses the **Port Address** and **Bits 3 & 4** of the dat
 2. **OCW1:** Masking (Data Port).
 3. **OCW2:** EOI, change priority (Command Port, Bit 3=0).
 4. **OCW3:** Status (Command Port, Bit 3=1).
+
+[refer](./pic-map.asm)
