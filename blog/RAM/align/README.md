@@ -2,6 +2,8 @@
 
 At the lowest level, a CPU doesn’t just "grab" a piece of data from a single long line of memory. It interacts with memory through a system of banks and channels. Understanding how this works explains why "misaligned" data can cut your program’s performance in half.
 
+> In this blog for simplicity i only used `A` register, depends on the CPU and architecture it can have more number of registers 
+
 1. The 8-Bit Era: The Simple Start
 
    In the 8-bit era, CPUs were built with 8-bit internal registers and an 8-bit data bus. This meant that the hardware was physically wired to process one byte (8 bits) at a time. Memory chips were manufactured to match this architecture, designed to provide exactly 8 bits of data for every unique address.
@@ -16,6 +18,10 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
    1. Cycle 1: Fetch the first 8 bits from memory.
    2. Cycle 2: Fetch the next 8 bits from the subsequent address.
    3. Conjunction: The CPU would then manually combine these two bytes within its registers to form a single 16-bit value.
+
+> Little Endian is used in this blog, The order is $\rightarrow$ $\cdots \text{08 04 02 01}$  
+> Right most bit is Least significant bit 
+> if data is `1234` in memory it store like this `34 12`
 
 2. The 16-Bit Era: The Birth of Banks
 
@@ -32,21 +38,24 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
 
     **How Parallel Access Works (The Common Address)**
     How does the CPU address two different chips at once? It uses a mathematical trick involving binary logic. Let’s look at two consecutive addresses:
-    Let's take Single data `feab` 
+    Let's take Single data `feab`  $\xrightarrow[\text{Endian}]{\text{Little}}$ `ab fe`
     * Address 2: 0010 (Binary) = `fe`
     * Address 3: 0011 (Binary) = `ab`
 
     The only difference is the Least Significant Bit (LSB). If you "ignore" the LSB (effectively right-shifting the address by 1 bit), both 0010 and 0011 become 001. This is the Common Address.
 
     By sending the common address 001 to both chips simultaneously:
-    1. The Even Bank provides the data at its location 001 `fe`(which corresponds to system address 2).
-    2. The Odd Bank provides the data at its location 001 `ab`(which corresponds to system address 3).
+    1. The Even (Right/Low) Bank provides the data at its location 001 `fe`(which corresponds to system address 2).
+    2. The Odd (Left/high) Bank provides the data at its location 001 `ab`(which corresponds to system address 3).
     
     Single data is splitted between two banks (0-7 in one bank an 8 - 15 in another). From chip prespective both are stored in 1st address of memory
     This allows the CPU to fill a 16-bit register in one clock cycle.
+    * Lower/Even bank 8 bit of data bus is connected directly to `AL` 
+    * Higher/Odd bank 8 bit of data bus is connected directly to `AH` 
+    * (`AH AL`)
 
     **Single Byte or 8 - bit data access**
-    When a 16-bit CPU reads a single 8-bit byte, it still utilizes the banking system, but with a specific control mechanism to ignore the bank it doesn't need.
+    When a 16-bit CPU reads a single 8-bit byte, it still utilizes the banking system, but with a specific control mechanism to ignore the bank it doesn't need. (only AL or AH is active in bus)
 
     Even though the CPU has two banks, it can choose to activate only one. This is handled by hardware signals (typically called Bus High Enable or BHE and the A0 address bit).
     1. Reading 8-bit from an Even Address
@@ -60,16 +69,16 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
     When you request 1 byte from an odd address (e.g., 0003):
     * The Process: The CPU generates the common address (001).
     * The Selection: It activates the Odd Bank and deactivates the Even Bank.
-    * The Path: Even though the data is in the Odd Bank (which is physically wired to the high-byte bus lines), the CPU internal logic "swaps" or routes this data into the Low Byte of your target register (AL).
+    * The Path: Even though the data is in the Odd Bank (which is physically wired to the high-byte bus lines), the Memory internal logic "swaps" or routes this data into lower byte of bus, in bus only AL is active.
     * Cycles: 1 Cycle.
 
     We can read even/odd address in AL or AH for single bit 
     ```
         MEMORY BANKS          DATA BUS            REGISTERS
         [ Odd Bank  ] <---- [ High Bus ] <---+---> [ AH ]
-                                            |
-                    (Internal Swapper/Bridge Logic)
-                                            |
+                                             |
+                     (Internal Swapper/Bridge Logic)
+                                             |
         [ Even Bank ] <---- [ Low Bus  ] <---+---> [ AL ]
     ```
 
@@ -141,7 +150,9 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
         **Reading Scenarios**
         * Start Address 0: (Banks 0 + 1). Same row. 1 Cycle.
         * Start Address 1: (Banks 1 + 2). Same row. 1 Cycle.
-            These are in the same row. Even though it’s an odd address, the CPU grabs them in 1 Cycle because it doesn't cross a row boundary. It just shifts the data internally to align with the AX register.
+            - These are in the same row.
+            - Read whole word(4 byte), because it arranged in odd-even pair. Even though it’s an odd address, the CPU grabs them in 1 Cycle because it doesn't cross a row boundary. It just shifts (8 bit right - LSB) the data internally to align with the AX register. 
+            - bit slower due to shift operation
         * Start Address 2: (Banks 2 + 3). Same row. 1 Cycle.
         * Start Address 3: (Bank 3 of Row 0 + Bank 0 of Row 1). 2 Cycles.
             * Cycle 1: Fetch Row 0 (grabs Bank 3).
