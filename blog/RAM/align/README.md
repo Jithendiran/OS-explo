@@ -85,28 +85,28 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
     **Aligned vs. Misaligned Access**
     The speed of the CPU now depends on where your data starts.
     * Aligned Access (Even Start)
-    When data starts at an Even Address, the Low Byte and High Byte share the same "row" (common address).
-    * Target: Address 0002 (16-bit data)
-    * Step: CPU sends common address 001 to both banks.
-    * Result: 1 Cycle.
+        When data starts at an Even Address, the Low Byte and High Byte share the same "row" (common address).
+        * Target: Address 0002 (16-bit data)
+        * Step: CPU sends common address 001 to both banks.
+        * Result: 1 Cycle.
 
-    ```
-    Address Space:
-    Row (Common Addr) | Even Bank (0) | Odd Bank (1)
-    ------------------------------------------------
-    Row 0000          | [ Addr 0 ]    | [ Addr 1 ]
-    Row 0001          | [ Addr 2 ]    | [ Addr 3 ]  <-- READ BOTH IN 1 CYCLE
-    Row 0010          | [ Addr 4 ]    | [ Addr 5 ]
-    ```
+        ```
+        Address Space:
+        Row (Common Addr) | Even Bank (0) | Odd Bank (1)
+        ------------------------------------------------
+        Row 0000          | [ Addr 0 ]    | [ Addr 1 ]
+        Row 0001          | [ Addr 2 ]    | [ Addr 3 ]  <-- READ BOTH IN 1 CYCLE
+        Row 0010          | [ Addr 4 ]    | [ Addr 5 ]
+        ```
 
-    **Misaligned Access (Odd Start)**
-    If you try to read 16-bit data starting from an Odd Address, the data spans across two different rows.
-    * Target: Address 0003 (16-bit data requires 0003 and 0004)
-    * The Problem: Address 0003 is in Row 0001 (Odd Bank) and Address 0004 is in Row 0010 (Even Bank).
-    Process:
-        1. Cycle 1: The CPU accesses Row 0001 to grab the byte from the Odd Bank.
-        2. Cycle 2: The CPU accesses Row 0010 to grab the byte from the Even Bank.
-    * Result: 2 Cycles. The CPU is 50% slower because the data is "misaligned."
+    * Misaligned Access (Odd Start)
+        If you try to read 16-bit data starting from an Odd Address, the data spans across two different rows.
+        * Target: Address 0003 (16-bit data requires 0003 and 0004)
+        * The Problem: Address 0003 is in Row 0001 (Odd Bank) and Address 0004 is in Row 0010 (Even Bank).
+        Process:
+            1. Cycle 1: The CPU accesses Row 0001 to grab the byte from the Odd Bank.
+            2. Cycle 2: The CPU accesses Row 0010 to grab the byte from the Even Bank.
+        * Result: 2 Cycles. The CPU is 50% slower because the data is "misaligned."
 
     ```
     Address Space:
@@ -127,7 +127,7 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
     3. Bank 2: Handles addresses $2, 6, 10, 14 \dots$
     4. Bank 3: Handles addresses $3, 7, 11, 15 \dots$
 
-    **Bank to Register Mapping (Correction)**
+    **Bank to Register Mapping**
     In a Little-Endian system, the wiring is sequential:
     1. Bank 0 is connected to the data bus bits 0–7 (Lower 8 bits).
     2. Bank 1 is connected to the data bus bits 8–15.
@@ -151,7 +151,7 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
         * Start Address 0: (Banks 0 + 1). Same row. 1 Cycle.
         * Start Address 1: (Banks 1 + 2). Same row. 1 Cycle.
             - These are in the same row.
-            - Read whole word(4 byte), because it arranged in odd-even pair. Even though it’s an odd address, the CPU grabs them in 1 Cycle because it doesn't cross a row boundary. It just shifts (8 bit right - LSB) the data internally to align with the AX register. 
+            - Read whole word(4 byte), because it arranged in odd-even pair, 8 bit in lower 16bit and 8 bit in higher 16 bit. Even though it’s an odd address, the CPU grabs them in 1 Cycle because it doesn't cross a row boundary. It just shifts (8 bit right - LSB) the data internally to align with the AX register. 
             - bit slower due to shift operation
         * Start Address 2: (Banks 2 + 3). Same row. 1 Cycle.
         * Start Address 3: (Bank 3 of Row 0 + Bank 0 of Row 1). 2 Cycles.
@@ -183,7 +183,7 @@ At the lowest level, a CPU doesn’t just "grab" a piece of data from a single l
 
     Bank to Register Mapping The wiring follows the 64-bit data bus sequentially:
     * Bank 0 connects to bits 0–7.
-    $\vdots$
+    * $\vdots$
     * Bank 7 connects to bits 56–63.
     The Swapper: Just like in the 32-bit era, the internal logic can route any bank to the lower part of a register, but it's most efficient when data is "naturally aligned."
 
