@@ -735,6 +735,233 @@ Syntax: `KEEP(*(.vectors))`
 
 Tells the linker: "Do not delete this, even if it looks like no one is using it."
 
+## Two Files
+
+### Simple start
+We have two files. Each has its own .text and .data. They don't know the other exists.
+
+```file_1.asm
+section .text
+    mov ax, 0x1111
+
+section .data
+    db 0x11, 0x11
+```
+
+```file_2.asm
+section .text
+    mov bx, 0x2222
+
+section .data
+    db 0x22, 0x22
+```
+
+* nasm -f elf32 file_1.asm -o file_1.o 
+```
+objdump -D file_1.o
+
+file_1.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:   66 b8 11 11             mov    $0x1111,%ax
+
+Disassembly of section .data:
+
+00000000 <.data>:
+   0:   11 11                   adc    %edx,(%ecx)
+```
+
+* nasm -f elf32 file_2.asm -o file_2.o
+```
+file_2.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:   66 bb 22 22             mov    $0x2222,%bx
+
+Disassembly of section .data:
+
+00000000 <.data>:
+   0:   22 22                   and    (%edx),%ah
+```
+
+Both files starting address are starts from `00000000`, it is local to that file only (relative addresse)
+
+* ld -m elf_i386 file_1.o file_2.o -o output.elf --verbose
+
+```
+ld: warning: cannot find entry symbol _start; defaulting to 08049000
+$ objdump -D output.elf
+
+output.elf:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+08049000 <.text>:
+ 8049000:       66 b8 11 11             mov    $0x1111,%ax
+ 8049004:       66 90                   xchg   %ax,%ax
+ 8049006:       66 90                   xchg   %ax,%ax
+ 8049008:       66 90                   xchg   %ax,%ax
+ 804900a:       66 90                   xchg   %ax,%ax
+ 804900c:       66 90                   xchg   %ax,%ax
+ 804900e:       66 90                   xchg   %ax,%ax
+ 8049010:       66 bb 22 22             mov    $0x2222,%bx
+
+Disassembly of section .data:
+
+0804a000 <__bss_start-0x6>:
+ 804a000:       11 11                   adc    %edx,(%ecx)
+ 804a002:       00 00                   add    %al,(%eax)
+ 804a004:       22 22                   and    (%edx),%ah
+
+```
+
+All the sections are grouped and arranged in the given order, `8049000` is start address
+
+why `8049000` is start address, The short answer is that 0x08049000 is the default base address
+
+### The Symbol Tabel
+
+```file_1.asm
+global global_code_1    ; Export this to the world
+
+section .text
+global_code_1:          ; GLOBAL
+    mov ax, 0x1111
+
+local_code_1:           ; LOCAL
+    nop
+
+section .data
+    db 0x11, 0x11
+```
+
+```file_2.asm
+global global_code_2    ; Export this to the world
+
+section .text
+global_code_2:          ; GLOBAL
+    mov bx, 0x2222
+
+local_code_1:           ; LOCAL (Same name as file_1!)
+    nop
+
+section .data
+    db 0x22, 0x22
+```
+
+* nasm -f elf32 file_1.asm -o file_1.o
+
+```
+$ readelf -s file_1.o
+
+Symbol table '.symtab' contains 6 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: 00000000     0 FILE    LOCAL  DEFAULT  ABS file_1.asm
+     2: 00000000     0 SECTION LOCAL  DEFAULT    1 .text
+     3: 00000000     0 SECTION LOCAL  DEFAULT    2 .data
+     4: 00000004     0 NOTYPE  LOCAL  DEFAULT    1 local_code_1
+     5: 00000000     0 NOTYPE  GLOBAL DEFAULT    1 global_code_1
+```
+
+* nasm -f elf32 file_2.asm -o file_2.o
+
+```
+$ readelf -s file_2.o
+
+Symbol table '.symtab' contains 6 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: 00000000     0 FILE    LOCAL  DEFAULT  ABS file_2.asm
+     2: 00000000     0 SECTION LOCAL  DEFAULT    1 .text
+     3: 00000000     0 SECTION LOCAL  DEFAULT    2 .data
+     4: 00000004     0 NOTYPE  LOCAL  DEFAULT    1 local_code_1
+     5: 00000000     0 NOTYPE  GLOBAL DEFAULT    1 global_code_2
+```
+
+Here you we have 2 labels global_code_1, global_code_2 and local_code_1, if we generate flatobject these are directlty converted to address, since we are generating `ELF Relocatable object`, all the values will be preserved till linking stage or beyond linking stage
+
+Why it have to preserve?
+Because we know by using linker we will merge all the Relocatable object into single final binary, so one part of the file can call other part of the files with the labels defined
+
+Labels can be local or global
+* local variables are only visible to that file while doing linking
+* Global variable are visible to all the files while doing linking
+
+if we want to call one functionality from other file we have to use global variable
+
+### Local Symbol Resolution 
+```
+section .text
+local_start:        
+    nop
+    jmp local_start 
+
+section .aaa
+
+local_1:
+    nop
+    nop
+local_2:
+    mov ax, 1
+    nop
+    jmp local_start
+    nop
+    jmp local_1
+    nop
+    nop
+    jmp local_2
+
+```
+
+```
+$ nasm -f elf32 file_1.asm -o file_1.o
+$ objdump -D file_1.o
+
+file_1.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <local_start>:
+   0:   90                      nop
+   1:   eb fd                   jmp    0 <local_start>
+
+Disassembly of section .aaa:
+
+00000000 <local_1>:
+   0:   90                      nop
+   1:   90                      nop
+
+00000002 <local_2>:
+   2:   66 b8 01 00             mov    $0x1,%ax
+   6:   90                      nop
+   7:   e9 fc ff ff ff          jmp    8 <local_2+0x6>
+   c:   90                      nop
+   d:   eb f1                   jmp    0 <local_1>
+   f:   90                      nop
+  10:   90                      nop
+  11:   eb ef                   jmp    2 <local_2>
+```
+
+```$ objdump -r file_1.o
+
+file_1.o:     file format elf32-i386
+
+RELOCATION RECORDS FOR [.aaa]:
+OFFSET   TYPE              VALUE
+00000008 R_386_PC32        .text
+```
+
+---
+
 ### LOADADDR
 
 LOADADDR(.section_name) is a built-in linker function that returns the LMA (the physical storage address) of a section.
