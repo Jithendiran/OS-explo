@@ -899,6 +899,12 @@ if we want to call one functionality from other file we have to use global varia
 
 ### Local Symbol Resolution 
 ```
+section .custom_data_0
+var_c:
+    db 0x00
+var_d:
+    db 0x00
+
 section .text
 local_start:        
     nop
@@ -917,7 +923,23 @@ local_2:
     jmp local_1
     nop
     nop
+    mov [label_3], ax
     jmp local_2
+
+    mov [var_c], ax
+    mov [var_d], ax
+
+    mov [var_b], ax
+    mov [var_a], ax
+
+label_3:
+    db 0x00
+
+section .custom_data_1
+var_a:
+    db 0x00
+var_b:
+    db 0x00
 
 ```
 
@@ -927,6 +949,14 @@ $ objdump -D file_1.o
 
 file_1.o:     file format elf32-i386
 
+
+Disassembly of section .custom_data_0:
+
+00000000 <var_c>:
+        ...
+
+00000001 <var_d>:
+        ...
 
 Disassembly of section .text:
 
@@ -948,7 +978,23 @@ Disassembly of section .aaa:
    d:   eb f1                   jmp    0 <local_1>
    f:   90                      nop
   10:   90                      nop
-  11:   eb ef                   jmp    2 <local_2>
+  11:   66 a3 31 00 00 00       mov    %ax,0x31
+  17:   eb e9                   jmp    2 <local_2>
+  19:   66 a3 00 00 00 00       mov    %ax,0x0
+  1f:   66 a3 01 00 00 00       mov    %ax,0x1
+  25:   66 a3 01 00 00 00       mov    %ax,0x1
+  2b:   66 a3 00 00 00 00       mov    %ax,0x0
+
+00000031 <label_3>:
+        ...
+
+Disassembly of section .custom_data_1:
+
+00000000 <var_a>:
+        ...
+
+00000001 <var_b>:
+        ...
 ```
 
 ```$ objdump -r file_1.o
@@ -958,6 +1004,11 @@ file_1.o:     file format elf32-i386
 RELOCATION RECORDS FOR [.aaa]:
 OFFSET   TYPE              VALUE
 00000008 R_386_PC32        .text
+00000013 R_386_32          .aaa
+0000001b R_386_32          .custom_data_0
+00000021 R_386_32          .custom_data_0
+00000027 R_386_32          .custom_data_1
+0000002d R_386_32          .custom_data_1
 ```
 
 ---
