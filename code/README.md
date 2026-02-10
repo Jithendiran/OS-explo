@@ -1011,6 +1011,168 @@ OFFSET   TYPE              VALUE
 0000002d R_386_32          .custom_data_1
 ```
 
+#### 1. Jump
+The CPU always calculates the jump starting from the address of the next instruction.
+
+`eb`: This is the "Opcode" for a Short JMP
+
+##### Short jump
+1. (jmp    0 <local_start>)
+    Same section
+    When the CPU is executing `eb fd`, the Instruction Pointer ($IP$) has already moved to the next instruction.
+    - Current Instruction Address: $0x1$
+    - Size of Instruction: $2\text{ bytes}$
+    - Reference Point (Next Address): $0x1 + 2 = 0x3$
+
+    We need to get back to address `0x0`. 
+    To get back to `local_start` (which is at address 0), the CPU has to go: $3 - 3 = 0$.
+
+    To find the displacement, we use the formula:
+    $$\text{Target Address} - \text{Next Instruction Address} = \text{Displacement}$$
+    $$0x00 - 0x03 = -3$$
+
+    $$3 = `0000 0011` -> -3 = `1111 1101` = 0xfd$$
+
+    No relocation record for this jump. Because the linker doesn't need to do anything! The "distance" is already baked into the code. Whether the program starts at address 0x1000 or 0x9000, local_start will always be 3 bytes behind the end of that jump instruction.
+
+    How to read this `jmp    0 <local_start>`?
+    - Take which section `local_start` it is. It is in `.text`. From the `.text` section it is at `0`
+    - It is telling where the jump instruction placed: from `.text` at 0th byte
+
+2. (jmp    0 <local_1>)
+    f1 = -15
+    $$\text{Target Address} - \text{Next Instruction Address} = \text{Displacement}$$
+    $$0x00 - 0x15 = -15 = f1$$
+
+    How to read this `jmp    0 <local_1>`?
+    - Take which section `local_1` it is. It is in `.aaa`. From the `.aaa` section it is at `0`
+    - It is telling where the jump instruction placed: from `.aaa` at 0th byte
+
+3. (jmp    2 <local_2>)
+    - Instruction Location: 0x17
+    - Instruction Length: 2 bytes (eb e9)
+    - Next Instruction Address: 0x17 + 2 = 0x19 (Decimal 25)
+    - Target Address: 0x02 (local_2)
+
+    $$0x02 - 0x19 = -0x17$$
+    - 17 == 23, -17 == e9
+
+    How to read this `jmp    2 <local_2>`?
+    - Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `2`nd bytes
+    - It is telling where the jump instruction placed: from `.aaa` at 2nd
+
+##### Near jump
+
+**Linker**
+```
+$ ld -m elf_i386 file_1.o -o file_1.out
+$ objdump -D file_1.out
+
+file_1:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+08049000 <local_start>:
+ 8049000:       90                      nop
+ 8049001:       eb fd                   jmp    8049000 <local_start>
+
+Disassembly of section .custom_data_0:
+
+0804a000 <var_c>:
+        ...
+
+0804a001 <var_d>:
+        ...
+
+Disassembly of section .aaa:
+
+0804a002 <local_1>:
+ 804a002:       90                      nop
+ 804a003:       90                      nop
+
+0804a004 <local_2>:
+ 804a004:       66 b8 01 00             mov    $0x1,%ax
+ 804a008:       90                      nop
+ 804a009:       e9 f2 ef ff ff          jmp    8049000 <local_start>
+ 804a00e:       90                      nop
+ 804a00f:       eb f1                   jmp    804a002 <local_1>
+ 804a011:       90                      nop
+ 804a012:       90                      nop
+ 804a013:       66 a3 33 a0 04 08       mov    %ax,0x804a033
+ 804a019:       eb e9                   jmp    804a004 <local_2>
+ 804a01b:       66 a3 00 a0 04 08       mov    %ax,0x804a000
+ 804a021:       66 a3 01 a0 04 08       mov    %ax,0x804a001
+ 804a027:       66 a3 35 a0 04 08       mov    %ax,0x804a035
+ 804a02d:       66 a3 34 a0 04 08       mov    %ax,0x804a034
+
+0804a033 <label_3>:
+        ...
+
+Disassembly of section .custom_data_1:
+
+0804a034 <var_a>:
+        ...
+
+0804a035 <var_b>:
+        ...
+```
+
+`e9` : Near Jump (a 32-bit relative jump).
+
+1. (jmp    8 <local_2+0x6>)
+    Cross section : Since these two sections are separate, assembler don't know where the Linker will put . .text relative to .aaa. Because the Assembler can't calculate the final distance, it has to delegate the work to the Linker.
+
+    `fc ff ff ff`: This is the "blank spot" the Assembler left. In Little-Endian math, this value is -4. 
+    A 32-bit jump is 5 bytes long. Since the jump starts at address 7, the next instruction starts at address 12 ($7 + 5 = 12$).
+    If you add -4 to 12, you get 8.
+    If you look at your disassembly, address 8 is exactly where the Value/Offset part of the instruction begins.
+
+    Because the Assembler couldn't finish the job, it created this entry in your relocation table `00000008 R_386_PC32 .text`
+
+    This tells the Linker:
+
+    `RELOCATION RECORDS FOR [.aaa]:` This tells the relocation table is related to `.aaa` section 
+    - Where: "Go to address 0x08 (the 'blank spot').", $0x00000000 + 0x08 = 0x00000008$, is the address need fix
+    - R_386 : Relocation instruction for a intel 80386
+    - What: "This is a PC32 (Program Counter) relative relocation."
+    - Target: "Find out where the .text section actually ends up and fix the math."
+
+    **How the Linker fixes it**
+    $$Target - NextIP = Displacement$$
+
+    - `.text` starts at `0x08049000`
+    - `.aaa` starts at `0804a002`
+    - The jmp is at `.aaa + 0x7(relocate offset)`, which is `0x804A009(real address)`.
+    - The "Next Instruction" is at $9 + 5 = 14 == e$, `0x804a00e`.
+    - The real target (local_start) is at `.text + 0x0(relocate offset)`, which is `0x08049000(real address)`.
+    - $0x08049000 - 0x804a00e = -0x100e$
+        - 0x100E in binary: `0000 0000 0000 0000 0001 0000 0000 1110`
+        - Invert bits: `1111 1111 1111 1111 1110 1111 1111 0001`
+        - Add 1: `1111 1111 1111 1111 1110 1111 1111 0010`
+        - Result in Hex: `0xFF FF EF F2`, in little endian `f2 ef ff ff.`
+
+    The linker will overwrite those fc ff ff ff bytes with the new relative offset.
+
+    How to read this `jmp    8 <local_2+0x6>`?
+    - Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `8`th bytes
+    - It is telling where the jump instruction placed: from `.aaa` at 8th
+    - `local_2+0x6` means from `local_2` it is at 6th byte
+
+**How to read `jmp    n <symbol+m>` (This is guide for linker)**
+1. The Number `n`
+    This is the Target Address. It is the exact location in memory where the code will land. 
+
+2. The `<symbol>`
+    This is the Nearest Label. objdump looks for the closest label that comes at or before the target address n. This tells you which section and which named block of code you are jumping into.
+
+3. The `+m`
+    This is the Offset. It is the number of bytes between the symbol and the target address n.
+
+    - If m is 0, the jump lands exactly on the label.
+
+    - If m is 0x6, the jump lands 6 bytes after the label.
+    
 ---
 
 ### LOADADDR
