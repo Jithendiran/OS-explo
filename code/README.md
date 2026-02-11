@@ -1175,6 +1175,22 @@ Disassembly of section .custom_data_1:
     
 ---
 
+> [!TIP]   
+>  Execute the below in bash shell 
+```sh
+hex-reloc() {
+    # Removes spaces and treats the input as little-endian
+    local hex_input=$(echo "$*" | tr -d ' ')
+    python3 -c "import struct; b = bytes.fromhex('$hex_input'); \
+                u = struct.unpack('<I', b)[0]; \
+                s = struct.unpack('<i', b)[0]; \
+                print(f'Hex (Big Endian): {u:08x}'); \
+                print(f'Unsigned Dec:     {u}'); \
+                print(f'Signed Dec:       {s}')"
+}
+```
+> `$  hex-reloc fc ff ff ff` execute like this to find the value
+
 ### LOADADDR
 
 LOADADDR(.section_name) is a built-in linker function that returns the LMA (the physical storage address) of a section.

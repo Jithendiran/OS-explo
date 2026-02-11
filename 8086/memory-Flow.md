@@ -230,3 +230,124 @@ The distinction happens in the **Address Decoding Logic**:
 | **Address Decoding** | The decoding circuit monitors the 20-bit address ($\text{A0-A19}$). | If the address falls within a predetermined range reserved for a peripheral (e.g., addresses $\text{F0000H}$ to $\text{FFFFFH}$), the decoder activates the peripheral instead of the main RAM. |
 | **$\text{M}/\overline{\text{IO}}$ Signal** | The $\mathbf{\text{M}/\overline{\text{IO}}}$ pin is $\mathbf{HIGH}$ (Memory). | Because the address decoder handles the selection, the peripheral must be configured to respond *only* when $\text{M}/\overline{\text{IO}}$ is **HIGH**. |
 | **Control Signals** | The decoder routes the $\text{RD}'$ and $\text{WR}'$ signals directly to the peripheral's internal registers. | The peripheral's registers treat $\text{RD}'$ as a command to output data (Input) and $\text{WR}'$ as a command to accept data (Output). |
+
+
+
+
+
+
+https://ece-research.unm.edu/jimp/310/slides/8086_chipset.html
+
+T1
+
+(I/0)           A0-3        = 0 
+(I/0)           A4-A15      = 1   
+(O)             A16-A19     = 1    = FFF0
+(I)     17      NMI         = 0 (grd)(static)
+(I)     18      INTR        = 0 (grd)(static)
+(O)     34      BHEB        = 0                         Active
+(I)     33      MN/MXB      = 5v (static)
+(O)     32      RDB         = 1
+(I)     31      HOLD        = grd(static)
+(O)     30      HOLDA       = 0
+(O)     29      WRB         = 1
+(O)     28      M/IOB       = 1                         Memory
+(O)     27      DT/RB       = 0                         Receive
+(O)     26      DENB        = 1
+(O)     25      ALE         = 1                         Active
+(O)     24      INTAB       = 1                         
+(I)     23      TEST        = grd(static)
+(I)     22      READY       = 5v(static)
+
+ALE is active treat the bus data as address
+Address is active output FFF0, Bus High Enable is active, Memory is selected, Address is active
+Address is 20 bit long so it need BHE actie
+Output's address and it is for memory
+
+external device must take the address
+
+T2
+
+(I/0)           A0-1        = 0
+(I/0)           A2          = 1
+(I/0)           A4-A15      = 0   
+(O)             A16-A19     = 0   
+
+(I)     17      NMI         = 0 (grd)(static)
+(I)     18      INTR        = 0 (grd)(static)
+(O)     34      BHEB        = 0                         Active
+(I)     33      MN/MXB      = 5v (static)
+(O)     32      RDB         = 0                         Active
+(I)     31      HOLD        = grd(static)
+(O)     30      HOLDA       = 0
+(O)     29      WRB         = 1
+(O)     28      M/IOB       = 1                         Memory
+(O)     27      DT/RB       = 0                         Receive
+(O)     26      DENB        = 1
+(O)     25      ALE         = 0
+(O)     24      INTA        = 1
+(I)     23      TEST        = grd(static)
+(I)     22      READY       = 5v(static)
+
+ALE goes of, means Bus is not holding address also Data enable (DENB) is not active so it is not an data in bus
+Bus neigther have data/address
+
+Read is enabled,  it is preparing for Receive operation
+
+in DT/RB is enabled, it is preparing for Receive operation
+
+external device must get to know about the operation
+
+
+T3
+
+(I/0)           A0-1        = 0
+(I/0)           A2          = 1
+(I/0)           A4-A15      = 0   
+(O)             A16-A19     = 0   
+
+(I)     17      NMI         = 0 (grd)(static)
+(I)     18      INTR        = 0 (grd)(static)
+(O)     34      BHEB        = 0                         Active
+(I)     33      MN/MXB      = 5v (static)
+(O)     32      RDB         = 0                         Active
+(I)     31      HOLD        = grd(static)
+(O)     30      HOLDA       = 0
+(O)     29      WRB         = 1
+(O)     28      M/IOB       = 1                         Memory
+(O)     27      DT/RB       = 0                         Receive
+(O)     26      DENB        = 0                         Active
+(O)     25      ALE         = 0
+(O)     24      INTA        = 1
+(I)     23      TEST        = grd(static)
+(I)     22      READY       = 5v(static)
+
+Now  Data enable (DENB) is active means it is enabled the bus for data, now BUS treat as data
+Now it is performing data transfer
+DTRB is active which means it is receiving the data
+
+T4
+
+(I/0)           A0-1        = 0
+(I/0)           A2          = 1
+(I/0)           A4-A15      = 0   
+(O)             A16-A19     = 0   
+
+(I)     17      NMI         = 0 (grd)(static)
+(I)     18      INTR        = 0 (grd)(static)
+(O)     34      BHEB        = 0                         Active
+(I)     33      MN/MXB      = 5v (static)
+(O)     32      RDB         = 1                         
+(I)     31      HOLD        = grd(static)
+(O)     30      HOLDA       = 0
+(O)     29      WRB         = 1
+(O)     28      M/IOB       = 1                         Memory
+(O)     27      DT/RB       = 0                         Receive
+(O)     26      DENB        = 1                         
+(O)     25      ALE         = 0
+(O)     24      INTA        = 1
+(I)     23      TEST        = grd(static)
+(I)     22      READY       = 5v(static)
+
+Now RDB and DENB is disabled which mean data operation is completed, 
+8086 is no longer access the bus, but it is doing the internal operations during this cycle
