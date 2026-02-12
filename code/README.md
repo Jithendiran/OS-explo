@@ -1012,9 +1012,87 @@ OFFSET   TYPE              VALUE
 ```
 
 #### 1. Jump
-The CPU always calculates the jump starting from the address of the next instruction.
+* Jump instruction 
+    **This example is only for jump instruction**
+    ```asm
+    start:
+        nop
+        jmp end
+        nop
+        jmp start
+        nop 
+        nop
+        jmp $
+        nop
+        nop
+    end:
+        nop
+        jmp start
+    ```
 
-`eb`: This is the "Opcode" for a Short JMP
+    ```objdump
+    file.o:     file format elf32-i386
+
+
+    Disassembly of section .text:
+
+    00000000 <start>:                                       # our Note, 
+    0:   90                      nop                     # offset in decimal signed number       PC calculation
+    1:   eb 09                   jmp    c <end>          #09 == 09                               3 + 9  = 12 (c) 
+    3:   90                      nop
+    4:   eb fa                   jmp    0 <start>        #fa == -6                               6 + (-6) = 0
+    6:   90                      nop
+    7:   90                      nop
+    8:   eb fe                   jmp    8 <start+0x8>    #fe == -2                               a + (-2) = 8
+    a:   90                      nop
+    b:   90                      nop
+
+    0000000c <end>:
+    c:   90                      nop
+    d:   eb f1                   jmp    0 <start>        #f1 == -15                              15 + (-15) = 0
+    ```
+
+
+
+    In object dump, jump does not put the final address, instead it put the offset to reach that address
+
+    for example take `1:   eb 09  `
+    - `eb` means short jump (with in section, it's offset length will be 1 byte)
+    - From the assembly we wrote as `jmp end`, end offset is `c`
+    - to reach `c` from current instruction c (target offset) - 1 (current offset) = b (11 steps), it has to add offset of 11,  so 1 + (b)11 = (c)12
+    if we think like that it will be correct in calculation phase, but it will not jump to `c` while execution, it will jump to `d (13)` instead, because `jump` will work based on the PC 
+
+    PC content will be modified by adder only, it won't take direct values
+
+    when we execute instruction from location 1, which means cpu readed complete instruction in this case 01-02, so pc is pointing to 03, so when executing 01 address instruction , pc is in 03. Jump calculation has to be done based on pc register, not based on current instruction 
+
+    so target is c, pc = 3, `c = 3 + ?`, c = 3 + 9, that 9 is placed in the offset of jump instruction, Assembler has to do calculation based on cpu execution perspective
+
+    This is ok for short jump, with 1 byte offset
+
+    but jump if jump has 2 , 4 bytes offset calculation has to be changed based on offset length
+
+    target = (offset start address + length of offset in bytes) + ?
+
+    c = (2 + 1) + ? 
+
+    c = 3 + ?
+
+    c = 3 + 9
+
+    why the calculation is from 2, 2 is the location where offset of jump start
+
+    `1:   eb 09` -> 1:   eb (jmp instruction)  -> 2: 09 (offset) 
+
+    in short **Jump calculation always should be based on next instruction, that has to written in jump instruction's offset**
+
+    $$\text{Stored Offset} = \text{Target Address} - (\text{offset start Address} + \text{offset Length in bytes})$$
+
+    The CPU always calculates the jump starting from the address of the next instruction.
+
+    `eb`: This is the "Opcode" for a Short JMP
+
+    **Completed jump instruction explaination**
 
 ##### Short jump
 1. (jmp    0 <local_start>)
