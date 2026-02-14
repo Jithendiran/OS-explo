@@ -33,6 +33,11 @@ var_6:
 
 ## 32 bit
 
+In 32-bit ELF files, the system uses a method called REL. 
+
+> objdump is off the track because of align issue of `var_3`, so do manual decoding like the comment shown `0 -> 00 ; 1 -> 66 a1 00 00 00 00`
+
+
 ```sh
 $ nasm -f elf32 file_1.asm -o file_1_32.o
 $ objdump -D file_1_32.o
@@ -89,16 +94,27 @@ OFFSET   TYPE              VALUE
 00000026 R_386_32          .custom_1
 ```
 
-TYPE `R_386_32` is absolute placement offset, the offset stored in instruction is the offset from the section 
-- As per relocation record 1st entry offset is `3` and type says it is 32 bit, the value is `00 00 00 00` meaning, `.custom_0`'s 0'th byte 
-- 2nd entry offset is `a`, type 32 bit the value is `01 00 00 00` meaning, `.custom_0`'s 1'st byte 
+- The Assembler writes the "Internal Offset" (the Addend) directly into the instruction bytes. 
+  - For var_1 (offset 0), it writes 00 00 00 00.
 
-in 32 bit even though var_3 and var_4 in it's local section it have relocation entry
-- 3rd, offset `11` -> `00 00 00 00`, `.text` section's 0th byte
-- 4th, offset `18` -> `2a 00 00 00 `, `.text` section's 2a(42)th byte
+- The Linker sees the relocation record (R_386_32). It takes the final memory address of the section and adds it to whatever value is already in the instruction.
+  - TYPE `R_386_32` is absolute placement offset, the offset stored in instruction is the offset from the section 
 
-- 5th, offset `1f` -> `00 00 00 00 `,  `.custom_1` section's 0th byte
-- 6th, offset `26` -> `01 00 00 00 `, `.custom_1` section's 1'st byte 
+Even though var_3 and var_4 are in the same section as the code, the computer still needs a relocation record. Why? Because the code doesn't know where the .text section will eventually be loaded in RAM (e.g., 0x08049000).
+
+| Entry | Offset in `.text` | Target Symbol | Value in Code (Addend) | Meaning |
+| --- | --- | --- | --- | --- |
+| **1st** | `03` | `.custom_0` | `00 00 00 00` | Points to start of `custom_0` |
+| **2nd** | `0a` | `.custom_0` | `01 00 00 00` | Points to 1 byte into `custom_0` |
+| **3rd** | `11` | `.text` | `00 00 00 00` | Points to start of `.text` (`var_3`) |
+| **4th** | `18` | `.text` | `2a 00 00 00` | Points to 42 bytes into `.text` (`var_4`) |
+| **5th** | `1f` | `.custom_1` | `00 00 00 00` | Points to start of `.custom_1` | 
+| **6th** | `26` | `.custom_1` | `01 00 00 00` | Points to 1 byte into `.custom_1` | 
+
+The final address:
+When you run ld, it decides that `.custom_0` starts at `0804a000`. It then goes through your code and performs the math:
+* **For `var_1`:** `0804a000` (Base) + `00000000` (Addend) = **`0804a000`**
+* **For `var_2`:** `0804a000` (Base) + `00000001` (Addend) = **`0804a001`**
 
 ```sh
 $ ld -m elf_i386 file_1_32.o -o file_1_32.out
@@ -141,20 +157,13 @@ Disassembly of section .custom_1:
         ...
 ```
 
-There is no relocation calculation much here
-.custom_0's base address is `0804a000`
-var_1 is at offset 0, so `0804a000` + 0 (from instruction)  = 0804a000
-var_2 is at offset 1, so `0804a000` + 1 (from instruction) = 0804a001
-like wise calcculated for all
-
-
-
 ## 64 bit
 
+In 64-bit ELF files, the system primarily uses a method called RELA (Relocations with Addends).
 
-; nasm -f elf64 file_1.asm -o file_1_64.o
-; objdump -D file_1_64.o
-```
+```sh
+$ nasm -f elf64 file_1.asm -o file_1_64.o
+$ objdump -D file_1_64.o
 
 file_1_64.o:     file format elf64-x86-64
 
@@ -197,9 +206,8 @@ Disassembly of section .custom_1:
 
 0000000000000001 <var_6>:
         ...
-```
-; objdump -r file_1_64.o
-```
+
+$ objdump -r file_1_64.o
 file_1_64.o:     file format elf64-x86-64
 
 RELOCATION RECORDS FOR [.text]:
@@ -210,17 +218,18 @@ OFFSET           TYPE              VALUE
 000000000000001e R_X86_64_32S      .text+0x0000000000000033
 0000000000000027 R_X86_64_32S      .custom_1
 000000000000002f R_X86_64_32S      .custom_1+0x0000000000000001
-
 ```
 
 
 Here addend are stored directly in relocation table
 
+`66 8b 04 25` is opcode for `mov ax` 
 
 
-;  ld -m elf_x86_64 file_1_64.o -o file_1_64.out
-; objdump -D file_1_64.out
-```
+```sh
+$  ld -m elf_x86_64 file_1_64.o -o file_1_64.out
+$ objdump -D file_1_64.out
+
 Disassembly of section .text:
 
 0000000000401000 <var_3>:
@@ -262,10 +271,10 @@ Disassembly of section .custom_1:
         ...
 ```
 
-Here problem is objdump lost the track
 
-see the manual decodeing
-
+see the manual decoding
+```
 0000000000401000 <var_3>:
   401000:       00
-  401001:       66 8b 04 25 00 20 40 00 -> 66 8b 04 25 -> mov ax, 00 20 40 00 -> 00402000 it is var 1
+  401001:       66 8b 04 25 00 20 40 00  ; -> 66 8b 04 25 -> mov ax ; 00 20 40 00 -> 00402000 it is var 1
+```

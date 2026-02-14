@@ -1,6 +1,8 @@
 ## Assembler 
 
-1. The Raw Start (The "Echo" Method)
+We know CPU execute instruction, instructions are in the hexa form. we will use opcode and operand to specify instructions
+
+### 1. The Raw Start (The "Echo" Method)
 Before we had assemblers, we had to look up hex codes in a book and type them manually.
 If you want the CPU to move a value into a register and then exit, you do this:    `echo -ne "\xba\x08\x00\xb4\x09\xcd\x21\xc3" > manual.bin`
 
@@ -11,13 +13,13 @@ If you want the CPU to move a value into a register and then exit, you do this: 
 
 The Problem: If you add one single byte of code in the middle, your "0008" address is now wrong. You have to go back and recalculate every single hex address by hand. This is why we use an Assembler.
 
-2. The Assembler's Job
+### 2. The Assembler's Job
 
 The Assembler (like NASM) is just a translator. It takes your text and does the math for you.
 
 ```asm
 ; display.asm
-[org 0x100]        ; Tell assembler we start at 0x100 (standard for DOS)
+[org 0x100]        ; Tell assembler we start at 0x100
 
 start:
     mov dx, msg    ; Assembler calculates the address of 'msg'
@@ -29,102 +31,107 @@ start:
 msg db 'Hello!$'   ; The data is just bytes sitting at the end
 ```
 
-When you run `nasm -f bin display.asm -o display.com`, the assembler creates the hex for you. It sees msg is exactly 11 bytes after the start, so it fills in the address automatically.
+When you run `nasm -f bin display.asm -o display.out`, the assembler creates the hex for you. It sees msg is exactly 11 bytes after the start, so it fills in the address automatically.
 
-> [org 0x100]  means offset address is calculated from 0x100, for example 
 
-To view the content use hexdump -C
-```
-hexdump -C display.com 
+To view the content use ` hexdump -C`
+```sh
+$ hexdump -C display.out 
 00000000  ba 0c 01 b4 09 cd 21 b8  00 4c cd 21 48 65 6c 6c  |......!..L.!Hell|
 00000010  6f 21 24                                          |o!$|
 00000013
 ```
 
 **The "ORG" Rule: Thinking vs. Being**
-You have to distinguish between where the code sits in the file and where the code thinks it is.
+> [org 0x100]  means offset address is calculated from 0x100, for example mov is 0x100, dx is 0x101, ...
 
-When you run hexdump -C, you are looking at the Hard Drive view. 
+we have to distinguish between where the code sits in the file and where the code thinks it is.
+
+When we run hexdump -C, we are looking at the Hard Drive view. 
+
 1. The File View (Physical Address)
     A file is just a box of bytes. The first byte of any file is always at index 0.
-    hexdump doesn't care about your code; it only cares about the file size.
+    hexdump doesn't care about our code; it only cares about the file size.
 2. The first byte of any file is always at index 0.
-    The [org 0x100] directive is a message for the Assembler's internal calculator.
-    If you didn't have [org 0x100], the assembler would calculate the address of msg as 0x000C.But since you added `[org 0x100]`, the assembler does this math: $0x100 (Base) + 0x000C (Offset) = 0x010C$
+    - The [org 0x100] directive is a message for the Assembler's internal calculator.
+    - If we didn't have [org 0x100], the assembler would calculate the address of msg as 0x000C. But since we added `[org 0x100]`, the assembler does this math: $0x100 (Base) + 0x000C (Offset) = 0x010C$
 3. Proof in the Hex
-    Look at your hexdump again:  `ba 0c 01 ...`
+    Look at our hexdump again:  `ba 0c 01 ...`
     * `ba` is `mov dx`.
     * `0c 01` is the address `0x010C` (Little Endian).
 
-The assembler put 010C into the machine code because you told it the code starts at 100. If you change it to [org 0x200], that hex will change to 0c 02, but the file will still start at 00000000 in hexdump.
+The assembler put 010C into the machine code because we told it the code starts at 100. If we change it to [org 0x200], that hex will change to 0c 02, but the file will still start at 00000000 in hexdump.
 
 The ouput given by nasm is final product
 
-**Moving Code to the "Magic" Address**
+### Moving Code to the "Magic" Address
 
-Every CPU has a "Reset Vector"—a hardcoded address where it looks for its very first instruction when you turn the power on. For example, an 8086 looks at 0xFFFF0.
+Every CPU has a "Reset Vector" a hardcoded address where it looks for its very first instruction when you turn the power on. For example, an 8086 looks at `0xFFFF0.`
 
 If your binary file is only 20 bytes long, it will be loaded at 0x0000. The CPU will find nothing at 0xFFFF0 and crash. You have to physically move your code to that exact spot in the file.
 
-1. Option 1: The "Padding" Trick (Inside the Assembler)
+#### 1. Option 1: The "Padding" Trick (Inside the Assembler)
 
-    You can tell the assembler to fill the "empty space" with zeros (or NOP instructions) until it reaches the target address.
+You can tell the assembler to fill the "empty space" with zeros (or NOP instructions) until it reaches the target address.
 
-    ```
-    ; --- The "Void" ---
-    ; Everything from address 0 to 0xFFFEF will be zeros
-    times 0xFFFF0 - ($ - $$) db 0 
+```asm
+; --- The "Void" ---
+; Everything from address 0 to 0xFFFEF will be zeros
+times 0xFFFF0 - ($ - $$) db 0 
 
-    ; --- The Start ---
-    ; This code will now physically sit at offset 0xFFFF0 in the file
-    start_logic:
-        mov dx, msg
-        mov ah, 0x09
-        int 0x21
-        jmp $          ; Infinite loop
-    ```
+; --- The Start ---
+; This code will now physically sit at offset 0xFFFF0 in the file
+start_logic:
+    mov dx, msg
+    mov ah, 0x09
+    int 0x21
+    jmp $          ; Infinite loop
+```
 
-2. Option 2: The "Lego" Method (Using cat)
-    Instead of one giant file, you build pieces and snap them together using the command line.
+#### 2. Option 2: The "Lego" Method (Using cat)
+Instead of one giant file, you build pieces and snap them together using the command line.
 
-    1. Create padding.bin (filled with zeros) using    `Python` or `dd`.
-    2. Create code.bin using your assembler.
-    3. Combine them: `cat padding.bin code.bin > final_bios.bin`
+1. Create padding.bin (filled with zeros) using    `Python` or `dd`.
+2. Create code.bin using your assembler.
+3. Combine them: `cat padding.bin code.bin > final_bios.bin`
 
-3. Option 3: Scripted Construction
+#### 3. Option 3: Scripted Construction
 
-    If you have many sections (Code at 0xFFFF0, Data at 0x7000, Stack at 0x9000), doing it by hand is impossible. You write a script (Python/Bash) to "place" the bytes.
+If you have many sections (Code at 0xFFFF0, Data at 0x7000, Stack at 0x9000), doing it by hand is impossible. You write a script (Python/Bash) to "place" the bytes.
 
-    ```py
-    # Simple Python builder logic
-    image = bytearray(1024 * 1024) # 1MB of empty memory
-    code = open("code.bin", "rb").read()
-    image[0xFFFF0 : 0xFFFF0 + len(code)] = code
-    open("bios.img", "wb").write(image)
-    ```
+```py
+# Simple Python builder logic
+image = bytearray(1024 * 1024) # 1MB of empty memory
+code = open("code.bin", "rb").read()
+image[0xFFFF0 : 0xFFFF0 + len(code)] = code
+open("bios.img", "wb").write(image)
+```
 
-If CPU connected to multiple device, it's address is splitted accordingly 
+If CPU connected to multiple device, it's address is splitted accordingly, so here more constrain comes, we shouldn't treat video card same as memory or timer. It will be more harder. Rather than logic we will be more worrying about the address alocation
 
-No labels, symbols are preserved 
+These are output ready, we can start executing the program directly, but it is less flexible. so comes the `Assembler` and `Linker`
+- Assembler treat each file a unique content, It's main job is to turn mnemonics (like mov) into opcodes (like 0xBA)
+- Linker is a memory mapper, it will give the final binary, which will execute in CPU, It decides which memory go where
+
+Here `nasm -f bin display.asm -o display.out`,  `-f bin` means give the final binary in final binary no labels, symbols are preserved 
 * Labels: Converted to address immediately.
 * Sections: Fixed in place.
-* Output: Ready to run (e.g., a .COM or bootloader).
+* Output: Ready to run (e.g., bootloader).
 * Multi-file: Extremely difficult to manage.
 
-> nm display.out 
-> $ nm: display.out: file format not recognized
-
-> objdump -aD display.out 
-> $ objdump: display.out: file format not recognized
-
-When you compine multiple binary file using linker, It will fail. It will say something like: a.o: file not recognized: File format not recognized. This is because ld expects an object file with a header (ELF), and you gave it raw machine code.
-
-
-------
+Utilities  don't recognize because they work only with `ELF` not with flat binary
+```sh
+$ nm display.out 
+nm: display.out: file format not recognized
+$ objdump -aD display.out 
+objdump: display.out: file format not recognized
+```
+When you compine multiple binary file using linker, It will fail. It will say something like: a.o: file not recognized: File format not recognized. This is because `ld` expects an object file with a header (ELF), and you gave it raw machine code.
 
 ## Linker 
 
-The more files and sections you have, the harder it is to maintain. Here is why it breaks:
+Here are the some examples of life without linker
+
 1. Hardcoded Math: If  `file_A.bin` needs to call a function in `file_B.bin`, you have to manually find the address in the hexdump of B and type it into A. If B changes by 1 byte, A is now broken.
 2. Space Inefficiency: Using times `0xFFFF0` ... creates files full of "air" (zeros). This wastes disk space.
 3. No "Smart" Placement: The assembler just puts things in order. It can't say, "Put this code in the fast RAM and this data in the slow ROM" automatically.
@@ -140,11 +147,10 @@ Instead of generating a finished product immediately, the assembler creates an R
 When multifiles are there. If main.asm wants to call a function in graphics.asm, the assembler fails. Why? Because when the assembler is looking at main.asm, it has no idea where graphics.asm will be in memory.
 
 1. The "Object File" (.o) – The Half-Baked Product
-    To solve the "multi-file" problem, we stopped asking the assembler to make a finished .bin. Instead, we told it to make an Object File (-f elf).
+    To solve the "multi-file" problem, we stopped asking the assembler to make a finished `.bin`. Instead, we told it to make an Object File (`-f elf`).
     An Object File It says:
     * My Code: "Here is my raw machine code."
-    * My Labels: "I have a label called start_logic at offset 0."
-    * My Needs: "I need the address for a label called msg, but I don't have it."
+    * My Needs: "I need the address for a symbol called msg, but I don't have it."
 
     The Assembler leaves "Holes" in the code. If you hexdump a `.o` file, you will see `ba 00 00`. The `00 00` is a blank spot. The assembler puts a note in the ELF header saying: "Dear Linker, please fill this hole with the real address of msg later."
 
@@ -163,11 +169,11 @@ section .data
     msg db 'Hello World$', 0
 ```
 
-> $ nasm -f elf display.asm -o display.o
-
+For now consider `00 00` as hole, but it is actually offset in `elf32` that we will see later in this docs. Now don't worry about that it is just a hole
 
 ```
-hexdump -C display.o
+$ nasm -f elf display.asm -o display.o
+$ hexdump -C display.o
 00000000  7f 45 4c 46 01 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
 00000010  01 00 03 00 01 00 00 00  00 00 00 00 00 00 00 00  |................|
 00000020  40 00 00 00 00 00 00 00  34 00 00 00 00 00 28 00  |@.......4.....(.|
@@ -215,8 +221,7 @@ Also it has many field it is very hard to look in hexdump do let's see in objdum
 
 The Assembler says: "I put 00 00 here for now, but I've added a note in the .rel.text section telling the linker to patch this offset with the final address of msg."
 
-
-```
+```sh
 $ objdump -Da display.o
 
 display.o:     file format elf32-i386
@@ -246,13 +251,11 @@ Disassembly of section .data:
 
 It also preserve's `label` and every thing
 
-The instruction in .data section is not valid, When you ran objdump -D, it tried to disassemble the .data section as if it were executable code. you have to only look for the opcodes like `48 65 6c,...`
-
-also notice `.text` and `.data` section each start's at address  `00000000` clearly it is not possible to start two section in same address like this, this address will be relocated by linker 
+> The instruction in .data section is not valid, When you ran objdump -D, it tried to disassemble the .data section as if it were executable code. you have to only look for the opcodes like `48 65 6c,...`, also notice `.text` and `.data` section each start's at address  `00000000` clearly it is not possible to start two section in same address like this, this address will be relocated by linker 
 
 You can see the labels/symbols `start_logic` and `msg`, To view only symbols 
 
-```
+```sh
 $ nm display.o
 00000000 d msg              ; addresss section symbol
 00000000 t start_logic
@@ -260,11 +263,15 @@ $ nm display.o
 
 When we have multiple sections like .text, .data we have to define a address where it should go in the real hardware address
 
+Just remember the above contents are give by assembler, linker not yet executed
+
+### Linker script
+
 A linker script is essentially the "blueprint" for your final executable. While the compiler turns your code into object files, the linker’s job is to stitch those files together. The linker script tells the linker exactly where in the hardware's memory those pieces should go.
 
 Let's say we need a section at address 0x10, 0x100 and 0x150, to meet our objective let's create a linker script to guide linker
 
-```
+```ld
 // linker.ld
 SECTIONS
 {
@@ -287,7 +294,7 @@ SECTIONS
 }
 ```
 
-```
+```asm
 section .low_data
     db 0xAA, 0xAA    ; This should end up at 0x10
 
@@ -318,9 +325,9 @@ To understand the script above, you need to know these three pillars:
 1. Assemble to Object: `nasm -f elf32 nasm_file.asm -o file.o`
 2. Linker with Script: `ld -m elf_i386 -T linker.ld file.o -o final.bin`
 
-> linker script is optional, if custom script not use it use default address
+if we don't specify linker script, it will take default, `gcc -Wl,--verbose /dev/null -o /dev/null` execute, `-Wl`: This tells gcc to pass the following options directly to the Linker (ld).
 
-```
+```sh
 $ hexdump -C final.bin
 00000000  7f 45 4c 46 01 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
 00000010  02 00 03 00 01 00 00 00  00 01 00 00 34 00 00 00  |............4...|
@@ -364,7 +371,7 @@ $ hexdump -C final.bin
 000012d4
 ```
 
-```
+```sh
 $ objdump -D final.bin 
 
 final.bin:     file format elf32-i386
@@ -391,14 +398,15 @@ Disassembly of section .high_data:
 
 Now we can see the sections are start at address 010, 0100,..
 
-here there is a small problem boot loaders don't understand `elf`, it only need raw binary at the start up, to omit the ELF related works use  `--oformat binary`, `ld -m elf_i386 -T linker.ld file.o -o final.bin --oformat binary`
+here there is a small problem for boot loaders, they don't understand `elf`, it only need raw binary at the start up, to omit the ELF related works use  `--oformat binary`. `ELF` is a unix style
 
-```
+```sh
+$ ld -m elf_i386 -T linker.ld file.o -o final.bin --oformat binary
 $objdump -D final.bin 
 objdump: final.bin: file format not recognized
 ```
 
-```
+```sh
 $ hexdump -C final.bin
 00000000  aa aa 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
@@ -419,7 +427,7 @@ here elf stuff are removed, also it removed empty padding from address `0x00 - 0
 
 We have to force the linker in this flat binary case
 
-```
+```ld
 //linker.ld
 SECTIONS
 {
@@ -429,7 +437,7 @@ SECTIONS
     /* 2. Create a dummy anchor at the very beginning */
     /*This is needed, some times linker is smarter to save file space truncate the starting 0's*/
     .anchor : {
-        BYTE(0x00); 
+        BYTE(0x00); // BYTE will define byte 00, once 00 is defined by user then linker will not remove 
     }
 
     /* Move to 0x10. Because we started at 0x0, 
@@ -445,7 +453,7 @@ SECTIONS
 }
 ```
 
-```
+```sh
 $ hexdump -C final.bin
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 00000010  aa aa 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
@@ -459,15 +467,18 @@ $ hexdump -C final.bin
 
 ```
 
-### The MEMORY Block (The Map)
+#### The MEMORY Block (The Map)
 In complex systems (like a microcontroller with 64KB of Flash and 16KB of RAM), you should define the hardware map first. This prevents you from accidentally putting 2MB of code into a 64KB chip.
 
-```linker.ld
+```ld
+/*linker.ld*/
 MEMORY
 {
     ROM (rx) : ORIGIN = 0x00000000, LENGTH = 64K
     /*ROM memory start at 0x00000000, it's length is 64kb, ROM 0 - 0x0000FFFF */
+
     /* Empty space 0x00010000 - 0x1FFFFFFF*/
+
     RAM (rwx): ORIGIN = 0x20000000, LENGTH = 16K
     /*RAM memory 0x20000000 - 0x20003FFF*/
 }
@@ -482,7 +493,8 @@ SECTIONS
 }
 ```
 
-```test.asm
+```asm
+;test.asm
 SECTION .text
     nop                 
 
@@ -513,12 +525,12 @@ SECTION .rodata
     - `> RAM` (VMA): The program expects these variables to be at a RAM address because RAM is readable and writable. You can't change x = 10; if it stays in ROM! 
     - `AT > ROM` (LMA): Because RAM is volatile (it wipes when power is lost), the initial value (the 5) must be stored in ROM while the device is in a box on a shelf.
 
-    When you turn on the microcontroller, the hardware doesn't automatically move that 5 from ROM to RAM. You (or your startup code/CRT0) must write a small loop that copies the data from the LMA (ROM) to the VMA (RAM) before main() starts.
+    When you turn on the microcontroller, the hardware doesn't automatically move that 5 from ROM to RAM. You (or your startup code) must write a small loop that copies the data from the LMA (ROM) to the VMA (RAM) before main() starts.
 
 This is standard `> [VMA] AT > [LMA]`, 1st VMA then LMA
 
 
-`> [VMA] > [LMA]`, this is not valid for LMA
+`> [VMA] > [LMA]`, this is not valid for LMA, requite `AT`
 
 1. `> ROM`	VMA = ROM, LMA = ROM. Simple and standard for code.
 2. `> RAM AT > ROM` VMA = RAM, LMA = ROM. The standard "Load-to-Flash, Run-from-RAM" setup.
@@ -526,11 +538,11 @@ This is standard `> [VMA] AT > [LMA]`, 1st VMA then LMA
 
 Think of AT as the "Storage" pointer. By using `AT > ROM`, you ensure that the value(constant) is burnt into the permanent Flash memory, ready to be copied into RAM every time the chip boots up.
 
-> $ nasm -f elf32 test.asm -o test.o
-> $ ld -m elf_i386 -T linker.ld test.o -o test.elf
 
-```
-objdump -D test.elf
+```sh
+$ nasm -f elf32 test.asm -o test.o
+$ ld -m elf_i386 -T linker.ld test.o -o test.elf
+$ objdump -D test.elf
 
 test.elf:     file format elf32-i386
 
@@ -553,14 +565,14 @@ Disassembly of section .data:
 20000001:	bb cc da da da       	mov    $0xdadadacc,%ebx
 ```
 
-text section contains both rodata and text section
-data section contains data
+* text section contains both rodata and text section
+* data section contains data
 
-It's address also mapped according to the memory
+* It's address also mapped according to the memory
 
 MEMORY sections can be overlapping, so mapping should be done carefully
 
-```
+```LD
 MEMORY
 {
     ROM (rx) : ORIGIN = 0x00000000, LENGTH = 64K
@@ -576,7 +588,7 @@ SECTIONS
 }
 ```
 
-```
+```SH
 $ld -m elf_i386 -T linker.ld test.o -o test.elf
 $ objdump -D test.elf
 
@@ -632,26 +644,26 @@ section .lobed
     db 0x44, 0x55, 0x66
 ```
 
-    ```
-    $ readelf -S test.o
-    There are 9 section headers, starting at offset 0x40:
+```sh
+$ readelf -S test.o
+There are 9 section headers, starting at offset 0x40:
 
-    Section Headers:
-    [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
-    [ 0]                   NULL            00000000 000000 000000 00      0   0  0
-    [ 1] .lobed            PROGBITS        00000000 0001b0 000006 00   A  0   0  1
-    [ 2] .utgobed          PROGBITS        00000000 0001c0 000004 00   A  0   0  1
-    [ 3] .text             PROGBITS        00000000 0001d0 000005 00  AX  0   0 16
-    [ 4] .data             PROGBITS        00000000 0001e0 000006 00  WA  0   0  4
-    [ 5] .rodata           PROGBITS        00000000 0001f0 000006 00   A  0   0  4
-    [ 6] .shstrtab         STRTAB          00000000 000200 00003f 00      0   0  1
-    [ 7] .symtab           SYMTAB          00000000 000240 000070 10      8   7  4
-    [ 8] .strtab           STRTAB          00000000 0002b0 00000a 00      0   0  1
-    Key to Flags:
-    W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
-    L (link order), O (extra OS processing required), G (group), T (TLS),
-    C (compressed), x (unknown), o (OS specific), E (exclude),
-    D (mbind), p (processor specific)
+Section Headers:
+[Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+[ 0]                   NULL            00000000 000000 000000 00      0   0  0
+[ 1] .lobed            PROGBITS        00000000 0001b0 000006 00   A  0   0  1
+[ 2] .utgobed          PROGBITS        00000000 0001c0 000004 00   A  0   0  1
+[ 3] .text             PROGBITS        00000000 0001d0 000005 00  AX  0   0 16
+[ 4] .data             PROGBITS        00000000 0001e0 000006 00  WA  0   0  4
+[ 5] .rodata           PROGBITS        00000000 0001f0 000006 00   A  0   0  4
+[ 6] .shstrtab         STRTAB          00000000 000200 00003f 00      0   0  1
+[ 7] .symtab           SYMTAB          00000000 000240 000070 10      8   7  4
+[ 8] .strtab           STRTAB          00000000 0002b0 00000a 00      0   0  1
+Key to Flags:
+W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+L (link order), O (extra OS processing required), G (group), T (TLS),
+C (compressed), x (unknown), o (OS specific), E (exclude),
+D (mbind), p (processor specific)
 ```
 
 ```ld
@@ -672,7 +684,7 @@ SECTIONS
 
 ```
 
-```
+```sh
 objdump -D test.elf
 
 test.elf:     file format elf32-i386
@@ -724,111 +736,21 @@ Disassembly of section .data:
     * Sequential Packing: The linker puts .text at 0x00000000. Since you didn't give .lobed a specific home in the SECTIONS block, the linker just stacks it right after .text in the same memory bank.
 
 
-### ENTRY
+#### ENTRY
 Syntax: ENTRY(start_logic)
 Even in a flat binary, the linker needs to know which function is the "start/main."
 
-### KEEP
+#### KEEP
 Linkers have a feature called "Garbage Collection" (--gc-sections). If the linker thinks a piece of code is never called, it deletes it to save space. However, Interrupt Vectors or Magic Signatures (like the 0xAA55 at the end of a bootloader) are never "called" by the code—they are read by hardware.
 
 Syntax: `KEEP(*(.vectors))`
 
 Tells the linker: "Do not delete this, even if it looks like no one is using it."
 
-## Two Files
-
-### Simple start
-We have two files. Each has its own .text and .data. They don't know the other exists.
-
-```file_1.asm
-section .text
-    mov ax, 0x1111
-
-section .data
-    db 0x11, 0x11
-```
-
-```file_2.asm
-section .text
-    mov bx, 0x2222
-
-section .data
-    db 0x22, 0x22
-```
-
-* nasm -f elf32 file_1.asm -o file_1.o 
-```
-objdump -D file_1.o
-
-file_1.o:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-00000000 <.text>:
-   0:   66 b8 11 11             mov    $0x1111,%ax
-
-Disassembly of section .data:
-
-00000000 <.data>:
-   0:   11 11                   adc    %edx,(%ecx)
-```
-
-* nasm -f elf32 file_2.asm -o file_2.o
-```
-file_2.o:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-00000000 <.text>:
-   0:   66 bb 22 22             mov    $0x2222,%bx
-
-Disassembly of section .data:
-
-00000000 <.data>:
-   0:   22 22                   and    (%edx),%ah
-```
-
-Both files starting address are starts from `00000000`, it is local to that file only (relative addresse)
-
-* ld -m elf_i386 file_1.o file_2.o -o output.elf --verbose
-
-```
-ld: warning: cannot find entry symbol _start; defaulting to 08049000
-$ objdump -D output.elf
-
-output.elf:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-08049000 <.text>:
- 8049000:       66 b8 11 11             mov    $0x1111,%ax
- 8049004:       66 90                   xchg   %ax,%ax
- 8049006:       66 90                   xchg   %ax,%ax
- 8049008:       66 90                   xchg   %ax,%ax
- 804900a:       66 90                   xchg   %ax,%ax
- 804900c:       66 90                   xchg   %ax,%ax
- 804900e:       66 90                   xchg   %ax,%ax
- 8049010:       66 bb 22 22             mov    $0x2222,%bx
-
-Disassembly of section .data:
-
-0804a000 <__bss_start-0x6>:
- 804a000:       11 11                   adc    %edx,(%ecx)
- 804a002:       00 00                   add    %al,(%eax)
- 804a004:       22 22                   and    (%edx),%ah
-
-```
-
-All the sections are grouped and arranged in the given order, `8049000` is start address
-
-why `8049000` is start address, The short answer is that 0x08049000 is the default base address
-
 ### The Symbol Tabel
 
-```file_1.asm
+```asm
+;file_1.asm
 global global_code_1    ; Export this to the world
 
 section .text
@@ -842,7 +764,8 @@ section .data
     db 0x11, 0x11
 ```
 
-```file_2.asm
+```asm
+;file_2.asm
 global global_code_2    ; Export this to the world
 
 section .text
@@ -856,9 +779,9 @@ section .data
     db 0x22, 0x22
 ```
 
-* nasm -f elf32 file_1.asm -o file_1.o
 
-```
+```sh
+$ nasm -f elf32 file_1.asm -o file_1.o
 $ readelf -s file_1.o
 
 Symbol table '.symtab' contains 6 entries:
@@ -871,9 +794,9 @@ Symbol table '.symtab' contains 6 entries:
      5: 00000000     0 NOTYPE  GLOBAL DEFAULT    1 global_code_1
 ```
 
-* nasm -f elf32 file_2.asm -o file_2.o
 
-```
+```sh
+$ nasm -f elf32 file_2.asm -o file_2.o
 $ readelf -s file_2.o
 
 Symbol table '.symtab' contains 6 entries:
@@ -898,7 +821,11 @@ Labels can be local or global
 if we want to call one functionality from other file we have to use global variable
 
 ### Local Symbol Resolution 
-```
+
+Here we will understand how local symbols are resolved, To understand this we will be using `jmp` and `variable style`
+
+```asm
+;file_1.asm
 section .custom_data_0
 var_c:
     db 0x00
@@ -943,7 +870,7 @@ var_b:
 
 ```
 
-```
+```sh
 $ nasm -f elf32 file_1.asm -o file_1.o
 $ objdump -D file_1.o
 
@@ -997,7 +924,9 @@ Disassembly of section .custom_data_1:
         ...
 ```
 
-```$ objdump -r file_1.o
+Relocation address for linker it is generated by assembler
+```sh
+$ objdump -r file_1.o
 
 file_1.o:     file format elf32-i386
 
@@ -1011,233 +940,25 @@ OFFSET   TYPE              VALUE
 0000002d R_386_32          .custom_data_1
 ```
 
-#### 1. Jump
-* Jump instruction 
-    **This example is only for jump instruction**
-    ```asm
-    start:
-        nop
-        jmp end
-        nop
-        jmp start
-        nop 
-        nop
-        jmp $
-        nop
-        nop
-    end:
-        nop
-        jmp start
-    ```
+How to read this `jmp    0 <local_start>`?
+- Take which section `local_start` it is. It is in `.text`. From the `.text` section it is at `0`
+- It is telling where the jump instruction placed: from `.text` at 0th byte
 
-    ```objdump
-    file.o:     file format elf32-i386
+How to read this `jmp    0 <local_1>`?
+- Take which section `local_1` it is. It is in `.aaa`. From the `.aaa` section it is at `0`
+- It is telling where the jump instruction placed: from `.aaa` at 0th byte
 
+How to read this `jmp    2 <local_2>`?
+- Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `2`nd bytes
+- It is telling where the jump instruction placed: from `.aaa` at 2nd
 
-    Disassembly of section .text:
-
-    00000000 <start>:                                       # our Note, 
-    0:   90                      nop                     # offset in decimal signed number       PC calculation
-    1:   eb 09                   jmp    c <end>          #09 == 09                               3 + 9  = 12 (c) 
-    3:   90                      nop
-    4:   eb fa                   jmp    0 <start>        #fa == -6                               6 + (-6) = 0
-    6:   90                      nop
-    7:   90                      nop
-    8:   eb fe                   jmp    8 <start+0x8>    #fe == -2                               a + (-2) = 8
-    a:   90                      nop
-    b:   90                      nop
-
-    0000000c <end>:
-    c:   90                      nop
-    d:   eb f1                   jmp    0 <start>        #f1 == -15                              15 + (-15) = 0
-    ```
-
-
-
-    In object dump, jump does not put the final address, instead it put the offset to reach that address
-
-    for example take `1:   eb 09  `
-    - `eb` means short jump (with in section, it's offset length will be 1 byte)
-    - From the assembly we wrote as `jmp end`, end offset is `c`
-    - to reach `c` from current instruction c (target offset) - 1 (current offset) = b (11 steps), it has to add offset of 11,  so 1 + (b)11 = (c)12
-    if we think like that it will be correct in calculation phase, but it will not jump to `c` while execution, it will jump to `d (13)` instead, because `jump` will work based on the PC 
-
-    PC content will be modified by adder only, it won't take direct values
-
-    when we execute instruction from location 1, which means cpu readed complete instruction in this case 01-02, so pc is pointing to 03, so when executing 01 address instruction , pc is in 03. Jump calculation has to be done based on pc register, not based on current instruction 
-
-    so target is c, pc = 3, `c = 3 + ?`, c = 3 + 9, that 9 is placed in the offset of jump instruction, Assembler has to do calculation based on cpu execution perspective
-
-    This is ok for short jump, with 1 byte offset
-
-    but jump if jump has 2 , 4 bytes offset calculation has to be changed based on offset length
-
-    target = (offset start address + length of offset in bytes) + ?
-
-    c = (2 + 1) + ? 
-
-    c = 3 + ?
-
-    c = 3 + 9
-
-    why the calculation is from 2, 2 is the location where offset of jump start
-
-    `1:   eb 09` -> 1:   eb (jmp instruction)  -> 2: 09 (offset) 
-
-    in short **Jump calculation always should be based on next instruction, that has to written in jump instruction's offset**
-
-    $$\text{Stored Offset} = \text{Target Address} - (\text{offset start Address} + \text{offset Length in bytes})$$
-
-    The CPU always calculates the jump starting from the address of the next instruction.
-
-    `eb`: This is the "Opcode" for a Short JMP
-
-    **Completed jump instruction explaination**
-
-##### Short jump
-1. (jmp    0 <local_start>)
-    Same section
-    When the CPU is executing `eb fd`, the Instruction Pointer ($IP$) has already moved to the next instruction.
-    - Current Instruction Address: $0x1$
-    - Size of Instruction: $2\text{ bytes}$
-    - Reference Point (Next Address): $0x1 + 2 = 0x3$
-
-    We need to get back to address `0x0`. 
-    To get back to `local_start` (which is at address 0), the CPU has to go: $3 - 3 = 0$.
-
-    To find the displacement, we use the formula:
-    $$\text{Target Address} - \text{Next Instruction Address} = \text{Displacement}$$
-    $$0x00 - 0x03 = -3$$
-
-    $$3 = `0000 0011` -> -3 = `1111 1101` = 0xfd$$
-
-    No relocation record for this jump. Because the linker doesn't need to do anything! The "distance" is already baked into the code. Whether the program starts at address 0x1000 or 0x9000, local_start will always be 3 bytes behind the end of that jump instruction.
-
-    How to read this `jmp    0 <local_start>`?
-    - Take which section `local_start` it is. It is in `.text`. From the `.text` section it is at `0`
-    - It is telling where the jump instruction placed: from `.text` at 0th byte
-
-2. (jmp    0 <local_1>)
-    f1 = -15
-    $$\text{Target Address} - \text{Next Instruction Address} = \text{Displacement}$$
-    $$0x00 - 0x15 = -15 = f1$$
-
-    How to read this `jmp    0 <local_1>`?
-    - Take which section `local_1` it is. It is in `.aaa`. From the `.aaa` section it is at `0`
-    - It is telling where the jump instruction placed: from `.aaa` at 0th byte
-
-3. (jmp    2 <local_2>)
-    - Instruction Location: 0x17
-    - Instruction Length: 2 bytes (eb e9)
-    - Next Instruction Address: 0x17 + 2 = 0x19 (Decimal 25)
-    - Target Address: 0x02 (local_2)
-
-    $$0x02 - 0x19 = -0x17$$
-    - 17 == 23, -17 == e9
-
-    How to read this `jmp    2 <local_2>`?
-    - Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `2`nd bytes
-    - It is telling where the jump instruction placed: from `.aaa` at 2nd
-
-##### Near jump
-
-**Linker**
-```
-$ ld -m elf_i386 file_1.o -o file_1.out
-$ objdump -D file_1.out
-
-file_1:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-08049000 <local_start>:
- 8049000:       90                      nop
- 8049001:       eb fd                   jmp    8049000 <local_start>
-
-Disassembly of section .custom_data_0:
-
-0804a000 <var_c>:
-        ...
-
-0804a001 <var_d>:
-        ...
-
-Disassembly of section .aaa:
-
-0804a002 <local_1>:
- 804a002:       90                      nop
- 804a003:       90                      nop
-
-0804a004 <local_2>:
- 804a004:       66 b8 01 00             mov    $0x1,%ax
- 804a008:       90                      nop
- 804a009:       e9 f2 ef ff ff          jmp    8049000 <local_start>
- 804a00e:       90                      nop
- 804a00f:       eb f1                   jmp    804a002 <local_1>
- 804a011:       90                      nop
- 804a012:       90                      nop
- 804a013:       66 a3 33 a0 04 08       mov    %ax,0x804a033
- 804a019:       eb e9                   jmp    804a004 <local_2>
- 804a01b:       66 a3 00 a0 04 08       mov    %ax,0x804a000
- 804a021:       66 a3 01 a0 04 08       mov    %ax,0x804a001
- 804a027:       66 a3 35 a0 04 08       mov    %ax,0x804a035
- 804a02d:       66 a3 34 a0 04 08       mov    %ax,0x804a034
-
-0804a033 <label_3>:
-        ...
-
-Disassembly of section .custom_data_1:
-
-0804a034 <var_a>:
-        ...
-
-0804a035 <var_b>:
-        ...
-```
-
-`e9` : Near Jump (a 32-bit relative jump).
-
-1. (jmp    8 <local_2+0x6>)
-    Cross section : Since these two sections are separate, assembler don't know where the Linker will put . .text relative to .aaa. Because the Assembler can't calculate the final distance, it has to delegate the work to the Linker.
-
-    `fc ff ff ff`: This is the "blank spot" the Assembler left. In Little-Endian math, this value is -4. 
-    A 32-bit jump is 5 bytes long. Since the jump starts at address 7, the next instruction starts at address 12 ($7 + 5 = 12$).
-    If you add -4 to 12, you get 8.
-    If you look at your disassembly, address 8 is exactly where the Value/Offset part of the instruction begins.
-
-    Because the Assembler couldn't finish the job, it created this entry in your relocation table `00000008 R_386_PC32 .text`
-
-    This tells the Linker:
-
-    `RELOCATION RECORDS FOR [.aaa]:` This tells the relocation table is related to `.aaa` section 
-    - Where: "Go to address 0x08 (the 'blank spot').", $0x00000000 + 0x08 = 0x00000008$, is the address need fix
-    - R_386 : Relocation instruction for a intel 80386
-    - What: "This is a PC32 (Program Counter) relative relocation."
-    - Target: "Find out where the .text section actually ends up and fix the math."
-
-    **How the Linker fixes it**
-    $$Target - NextIP = Displacement$$
-
-    - `.text` starts at `0x08049000`
-    - `.aaa` starts at `0804a002`
-    - The jmp is at `.aaa + 0x7(relocate offset)`, which is `0x804A009(real address)`.
-    - The "Next Instruction" is at $9 + 5 = 14 == e$, `0x804a00e`.
-    - The real target (local_start) is at `.text + 0x0(relocate offset)`, which is `0x08049000(real address)`.
-    - $0x08049000 - 0x804a00e = -0x100e$
-        - 0x100E in binary: `0000 0000 0000 0000 0001 0000 0000 1110`
-        - Invert bits: `1111 1111 1111 1111 1110 1111 1111 0001`
-        - Add 1: `1111 1111 1111 1111 1110 1111 1111 0010`
-        - Result in Hex: `0xFF FF EF F2`, in little endian `f2 ef ff ff.`
-
-    The linker will overwrite those fc ff ff ff bytes with the new relative offset.
-
-    How to read this `jmp    8 <local_2+0x6>`?
-    - Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `8`th bytes
-    - It is telling where the jump instruction placed: from `.aaa` at 8th
-    - `local_2+0x6` means from `local_2` it is at 6th byte
+How to read this `jmp    8 <local_2+0x6>`?
+- Take which section `local_2` it is. It is in `.aaa`. From the `.aaa` section it is at `8`th bytes
+- It is telling where the jump instruction placed: from `.aaa` at 8th
+- `local_2+0x6` means from `local_2` it is at 6th byte
 
 **How to read `jmp    n <symbol+m>` (This is guide for linker)**
+
 1. The Number `n`
     This is the Target Address. It is the exact location in memory where the code will land. 
 
@@ -1250,24 +971,107 @@ Disassembly of section .custom_data_1:
     - If m is 0, the jump lands exactly on the label.
 
     - If m is 0x6, the jump lands 6 bytes after the label.
-    
----
 
-> [!TIP]   
->  Execute the below in bash shell 
-```sh
-hex-reloc() {
-    # Removes spaces and treats the input as little-endian
-    local hex_input=$(echo "$*" | tr -d ' ')
-    python3 -c "import struct; b = bytes.fromhex('$hex_input'); \
-                u = struct.unpack('<I', b)[0]; \
-                s = struct.unpack('<i', b)[0]; \
-                print(f'Hex (Big Endian): {u:08x}'); \
-                print(f'Unsigned Dec:     {u}'); \
-                print(f'Signed Dec:       {s}')"
-}
+**Jump and Var**
+1. [Jump](./jump.md)
+2. [var](var.md)
+
+## Two Files
+
+### Simple start
+We have two files. Each has its own .text and .data. They don't know the other exists.
+
+```asm
+;file_1.asm
+section .text
+    mov ax, 0x1111
+
+section .data
+    db 0x11, 0x11
 ```
-> `$  hex-reloc fc ff ff ff` execute like this to find the value
+
+```asm
+; file_2.asm
+section .text
+    mov bx, 0x2222
+
+section .data
+    db 0x22, 0x22
+```
+
+```sh
+$ nasm -f elf32 file_1.asm -o file_1.o 
+$ objdump -D file_1.o
+
+file_1.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:   66 b8 11 11             mov    $0x1111,%ax
+
+Disassembly of section .data:
+
+00000000 <.data>:
+   0:   11 11                   adc    %edx,(%ecx)
+```
+
+```sh
+$ nasm -f elf32 file_2.asm -o file_2.o
+$ objdump -D file_2.o
+
+file_2.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:   66 bb 22 22             mov    $0x2222,%bx
+
+Disassembly of section .data:
+
+00000000 <.data>:
+   0:   22 22                   and    (%edx),%ah
+```
+
+Both files starting address are starts from `00000000`, it is local to that file only (relative addresse)
+
+
+```sh
+$ ld -m elf_i386 file_1.o file_2.o -o output.elf --verbose
+ld: warning: cannot find entry symbol _start; defaulting to 08049000
+$ objdump -D output.elf
+
+output.elf:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+08049000 <.text>:
+ 8049000:       66 b8 11 11             mov    $0x1111,%ax
+ 8049004:       66 90                   xchg   %ax,%ax
+ 8049006:       66 90                   xchg   %ax,%ax
+ 8049008:       66 90                   xchg   %ax,%ax
+ 804900a:       66 90                   xchg   %ax,%ax
+ 804900c:       66 90                   xchg   %ax,%ax
+ 804900e:       66 90                   xchg   %ax,%ax
+ 8049010:       66 bb 22 22             mov    $0x2222,%bx
+
+Disassembly of section .data:
+
+0804a000 <__bss_start-0x6>:
+ 804a000:       11 11                   adc    %edx,(%ecx)
+ 804a002:       00 00                   add    %al,(%eax)
+ 804a004:       22 22                   and    (%edx),%ah
+
+```
+
+All the sections are grouped and arranged in the given order, `8049000` is start address
+
+why `8049000` is start address, The short answer is that 0x08049000 is the default base address
+
+
 
 ### LOADADDR
 
@@ -1480,3 +1284,48 @@ If you can answer these three questions, you've learned the basics:
 3. What is the difference between a Symbol and a Section?
 
 **Which of these five areas feels the most "blurry" to you right now? I can dive deep into that specific one.**
+
+TODO 
+1. 
+    Ask AI to create a malware (Malware often uses "Position Independent Code" (PIC) or custom loaders to hide its behavior.) and reverse engineer it
+
+2. 
+
+    The concept you are studying is broadly called **Linker Memory Management**, but specifically, it is known as **Address Binding** or **LMA vs. VMA Separation**.
+
+    In the world of embedded systems and operating system kernels, this specific setup is most commonly referred to as:
+
+    ### 1. The Runtime Relocation (or "Copy-down")
+
+    This is the process where the **Startup Code** (sometimes called `crt0` or "C-Runtime Startup") moves data from its storage location to its execution location.
+
+    ### 2. Overlay Mapping
+
+    While "Overlay" is an older term used when RAM was extremely small, the logic is the same: mapping a section of code or data to two different addresses (one for **storage** and one for **execution**).
+
+    ---
+
+    ## Keywords for Future Research
+
+    If you want to dive deeper into documentation (like the GNU LD Manual or ARM/Keil docs), look for these terms:
+
+    * **Load Memory Address (LMA):** The physical address where the section is loaded into the device (Flash/ROM).
+    * **Virtual Memory Address (VMA):** The address the section has when the program is actually running (RAM).
+    * **Position Independent Code (PIC):** A related concept where code can run anywhere in memory without needing a fixed VMA.
+    * **Scatter Loading:** This is the specific term used by **ARM/Keil** compilers for the exact same `> RAM AT > ROM` concept.
+    * **Sections and Segments:** To understand how the linker groups your `.text`, `.data`, and `.bss`.
+
+    ---
+
+    ### A Quick Mental Shortcut
+
+    Whenever you see `AT` in a linker script, think: **"Store it AT [LMA], but run it FROM [VMA]."**
+
+    ### Why do we need this?
+
+    If you didn't have this concept, you would have two bad choices:
+
+    1. **Run everything from ROM:** Very slow (Flash is slower than RAM) and you couldn't change variables (Read-Only).
+    2. **Load everything into RAM:** You'd lose your entire program every time you turned off the power.
+
+    By separating **LMA** and **VMA**, you get the best of both worlds: **Permanent storage** and **Fast, modifiable execution.**
