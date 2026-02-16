@@ -45,12 +45,14 @@ nop
 global_code_1:          
     mov ax, 0x1111
     mov ax, [a]
+    jmp global_code_1
 
 local_code_1:          
     nop
 
 section .data
     db 0x11, 0x11
+    jmp global_code_1
 ```
 
 ```asm
@@ -405,13 +407,14 @@ Look at the `mov` instructions in the `.code` section:
 > [!NOTE] `global_code_1`
 > In file_1.o, the offset is 2 because the assembler knows the symbol's location within its own section, whereas in file_2.o, the offset is 0 because the symbol is external and the assembler has no local address information to provide.
     
-The "Master Global List" is a conceptual internal structure the linker uses while it's working, but you can see the result of it in two ways:
+
+#### Linking
 
 ```sh
 $ ld -m elf_i386 file_1.o file_2.o --verbose -M --cref > program.map
-1. Open file and load
 ```
-```
+
+```sh
 ld: mode elf_i386
 attempt to open file_1.o succeeded
 file_1.o
@@ -419,24 +422,40 @@ attempt to open file_2.o succeeded
 file_2.o
 ```
 
-2. start sections in ascending order and assign address for each
+2. start section address assignment in ascending order
 
+```sh
+.rel.dyn        0x080480b4        0x0
+.rel.got        0x080480b4        0x0 file_1.o
+.rel.plt        0x080480b4        0x0
+.rel.iplt       0x080480b4        0x0 file_1.o
+.relr.dyn       0x08049000 
+.plt            0x08049000        0x0
+.iplt           0x08049000        0x0 file_1.o
+.text           0x08049000        0x15
+
+```
 
 let's skip all other things look only needed 
 
 read .text from file_1.o
-```
-.text          0x08049000        0xd file_1.o
-               0x08049002                global_code_1
+```sh
+ .text          0x08049000        0xf file_1.o
+                0x08049002                global_code_1
 ```
 
 For global_code_1 it asigns address
+
+```sh
+.text           0x08049010        0x5 file_2.o
+.fini           0x0804a000
+```
 
 Then it read .text from file_2.o
 
 3. then read other sectiosn 
 
-```
+```sh
 .cs             0x0804a000        0x1
  .cs            0x0804a000        0x1 file_2.o
                 0x0804a000                a
@@ -449,7 +468,51 @@ Then it read .text from file_2.o
                 0x0804a013                b
 ```
 
+Till this our all global memory got address, Linker assign pull out each sections and global symbols in each file assign address  
+
+4. Other sections base memory 
+
+```sh
+.exception_ranges    0x0804b014  
+.tdata          0x0804b014        0x0
+.preinit_array  0x0804b014        0x0
+.init_array     0x0804b014        0x0
+.fini_array     0x0804b014        0x0
+.got            0x0804b014        0x0
+.got            0x0804b014        0x0 file_1.o
+
+.got.plt        0x0804b014        0x0
+ *(.got.plt)
+ .got.plt       0x0804b014        0x0 file_1.o
+ *(.igot.plt)
+ .igot.plt      0x0804b014        0x0 file_1.o
+
+.data           0x0804b014        0x7
+ *(.data .data.* .gnu.linkonce.d.*)
+ .data          0x0804b014        0x7 file_1.o
+
+.data1
+ *(.data1)
+                0x0804b01b                        _edata = .
+                [!provide]                        PROVIDE (edata = .)
+                0x0804b01c                        . = ALIGN (ALIGNOF (NEXT_SECTION))
+                0x0804b01b                        __bss_start = .
+
+.bss            0x0804b01b        0x0
+ *(.dynbss)
+ *(.bss .bss.* .gnu.linkonce.b.*)
+ *(COMMON)
+                0x0804b01b                        . = ALIGN ((. != 0x0)?0x4:0x1)
+                0x0804b01c                        . = ALIGN (0x4)
+                0x0804b01c                        . = SEGMENT_START ("ldata-segment", .)
+                0x0804b01c                        . = ALIGN (0x4)
+                0x0804b01c                        _end = .
+                [!provide]                        PROVIDE (end = .)
+                0x0804b01c                        . = DATA_SEGMENT_END (.)
+
 ```
+5. Look the cross ref table, it tells which file has which global symbol
+```sh
 OUTPUT(a.out elf32-i386)
 
 Cross Reference Table
@@ -462,36 +525,93 @@ b                                                 file_2.o
 global_code_1                                     file_1.o
                                                   file_2.o
 ```
+
 here we noticed address is assigned only for global symbols all the local symbols are handled internally
-```
+
+
 ```sh
 $ nm a.out
 0804a000 R a
 0804a013 R b
-0804b016 D __bss_start
-0804b016 D _edata
-0804b018 D _end
+0804b01b D __bss_start
+0804b01b D _edata
+0804b01c D _end
 08049002 T global_code_1
 0804a012 r loc
-0804900c t local_code_1
+0804900e t local_code_1
          U _start
 ```
 
-Collection: Linker reads file_1.o. It sees global_code_1 (Bind: Global, Ndx: 1). It adds global_code_1 to its internal "Master List" with a pointer to file_1.o.
+#### Maunal calc and cross verify
 
-Resolution: Linker reads file_1.o again and sees a Relocation Record for a (Bind: Global, Ndx: UND).
+Address for variables will be allocated directly
 
-The Search: The linker looks at its Master List.
-    If file_2.o defined a as Global, the linker finds it.
-    The linker now knows the Address of a and the Address of the instruction in file_1.o.
+Jump needs calculation
 
-The Patch: The linker performs the math ($S + A$) and writes the real address of a into the bytes of file_1.o.
+##### .data
+
+e9 fe ff ff ff
+    $$\text{Result} = S + A - P$$
+    .data == `0x0804b014` + 3 (offset)
+    symbol (global_code_1) == `08049002`
+    $$\text{Result} = S + A - P = 08049002 + fffffffe  - 804b017=FF FF DF E9$$
+    expected = FF FF DF E7
+
+##### .text
+e9 fc ff ff ff
+    .text=`0x08049010` + 1 (offset)
+    $$\text{Result} = S + A - P = 08049002 + fffffffc  - 08049011=FF FF FF ED$$
+
+#### .code
+e9 fc ff ff ff 
+    .code=`0804a001` + 1 (Offser)
+    $$\text{Result} = S + A - P = 08049002 + fffffffc  - 0804a002=FF FF EF FC$$
+
+```sh
+$ objdump -D a.out 
+
+a.out:     file format elf32-i386
 
 
+Disassembly of section .text:
 
-How the Linker handles them during the Flow
-Input: The linker reads file_1.o.
-Filter: It looks at the Section Headers. It sees .text has the A flag. It says: "I need to find a home for this in RAM."
-Merge: It finds all other .text sections from other files and puts them together.
-Relocate: Because it moved .text to a new home (e.g., 0x08049000), it now looks at the .rel.text section to see which "holes" inside .text need to be patched with the new addresses.
-Discard: It sees .symtab and .strtab. It uses them to resolve the names, but then it usually discards them or puts them at the very end of the file, completely outside the "Loadable" segments.
+08049000 <global_code_1-0x2>:
+ 8049000:       90                      nop
+ 8049001:       90                      nop
+
+08049002 <global_code_1>:
+ 8049002:       66 b8 11 11             mov    $0x1111,%ax
+ 8049006:       66 a1 00 a0 04 08       mov    0x804a000,%ax
+ 804900c:       eb f4                   jmp    8049002 <global_code_1>
+
+0804900e <local_code_1>:
+ 804900e:       90                      nop
+ 804900f:       90                      nop
+ 8049010:       e9 ed ff ff ff          jmp    8049002 <global_code_1>
+
+Disassembly of section .cs:
+
+0804a000 <a>:
+        ...
+
+Disassembly of section .code:
+
+0804a001 <.code>:
+ 804a001:       e9 fc ef ff ff          jmp    8049002 <global_code_1>
+ 804a006:       66 a1 12 a0 04 08       mov    0x804a012,%ax
+ 804a00c:       66 a1 13 a0 04 08       mov    0x804a013,%ax
+
+Disassembly of section .ji:
+
+0804a012 <loc>:
+        ...
+
+0804a013 <b>:
+        ...
+
+Disassembly of section .data:
+
+0804b014 <__bss_start-0x7>:
+ 804b014:       11 11                   adc    %edx,(%ecx)
+ 804b016:       e9 e7 df ff ff          jmp    8049002 <global_code_1>
+```
