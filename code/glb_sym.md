@@ -414,120 +414,130 @@ Look at the `mov` instructions in the `.code` section:
 $ ld -m elf_i386 file_1.o file_2.o --verbose -M --cref > program.map
 ```
 
-```sh
-ld: mode elf_i386
-attempt to open file_1.o succeeded
-file_1.o
-attempt to open file_2.o succeeded
-file_2.o
-```
+1. Reading file
 
-2. start section address assignment in ascending order
+    ```sh
+    ld: mode elf_i386
+    attempt to open file_1.o succeeded
+    file_1.o
+    attempt to open file_2.o succeeded
+    file_2.o
+    ```
 
-```sh
-.rel.dyn        0x080480b4        0x0
-.rel.got        0x080480b4        0x0 file_1.o
-.rel.plt        0x080480b4        0x0
-.rel.iplt       0x080480b4        0x0 file_1.o
-.relr.dyn       0x08049000 
-.plt            0x08049000        0x0
-.iplt           0x08049000        0x0 file_1.o
-.text           0x08049000        0x15
+2. start section address assignment in order of sections defined in linker script
 
-```
+    ```sh
+    .rel.dyn        0x080480b4        0x0
+    .rel.got        0x080480b4        0x0 file_1.o
+    .rel.plt        0x080480b4        0x0
+    .rel.iplt       0x080480b4        0x0 file_1.o
+    .relr.dyn       0x08049000 
+    .plt            0x08049000        0x0
+    .iplt           0x08049000        0x0 file_1.o
+    .text           0x08049000        0x15
+
+    ```
 
 let's skip all other things look only needed 
 
-read .text from file_1.o
-```sh
- .text          0x08049000        0xf file_1.o
-                0x08049002                global_code_1
-```
+3. Address assignment for `.text`
 
-For global_code_1 it asigns address
 
-```sh
-.text           0x08049010        0x5 file_2.o
-.fini           0x0804a000
-```
 
-Then it read .text from file_2.o
+    > Address assignment for section `.text` and global symbol `global_code_1`
 
-3. then read other sectiosn 
+    ```sh
+    .text          0x08049000        0xf file_1.o
+                    0x08049002                global_code_1
+    ```
 
-```sh
-.cs             0x0804a000        0x1
- .cs            0x0804a000        0x1 file_2.o
-                0x0804a000                a
 
-.code           0x0804a001       0x11
- .code          0x0804a001       0x11 file_2.o
+    ```sh
+    .text           0x08049010        0x5 file_2.o
+    .fini           0x0804a000
+    ```
 
-.ji             0x0804a012        0x2
- .ji            0x0804a012        0x2 file_2.o
-                0x0804a013                b
-```
+    Then it read  and assign address for `.text` from file_2.o
 
-Till this our all global memory got address, Linker assign pull out each sections and global symbols in each file assign address  
+3. Read other sectiosn 
+
+    > Assign address for sections `.cs`, `.code`, `.ji` and global symbols `a`, `b` 
+
+    ```sh
+    .cs             0x0804a000        0x1
+     .cs            0x0804a000        0x1 file_2.o
+                    0x0804a000                a
+
+    .code           0x0804a001       0x11
+     .code          0x0804a001       0x11 file_2.o
+
+    .ji             0x0804a012        0x2
+     .ji            0x0804a012        0x2 file_2.o
+                    0x0804a013                b
+    ```
+
+    
 
 4. Other sections base memory 
 
-```sh
-.exception_ranges    0x0804b014  
-.tdata          0x0804b014        0x0
-.preinit_array  0x0804b014        0x0
-.init_array     0x0804b014        0x0
-.fini_array     0x0804b014        0x0
-.got            0x0804b014        0x0
-.got            0x0804b014        0x0 file_1.o
+    ```sh
+    .exception_ranges    0x0804b014  
+    .tdata          0x0804b014        0x0
+    .preinit_array  0x0804b014        0x0
+    .init_array     0x0804b014        0x0
+    .fini_array     0x0804b014        0x0
+    .got            0x0804b014        0x0
+    .got            0x0804b014        0x0 file_1.o
 
-.got.plt        0x0804b014        0x0
- *(.got.plt)
- .got.plt       0x0804b014        0x0 file_1.o
- *(.igot.plt)
- .igot.plt      0x0804b014        0x0 file_1.o
+    .got.plt        0x0804b014        0x0
+    *(.got.plt)
+    .got.plt       0x0804b014        0x0 file_1.o
+    *(.igot.plt)
+    .igot.plt      0x0804b014        0x0 file_1.o
 
-.data           0x0804b014        0x7
- *(.data .data.* .gnu.linkonce.d.*)
- .data          0x0804b014        0x7 file_1.o
+    .data           0x0804b014        0x7
+    *(.data .data.* .gnu.linkonce.d.*)
+    .data          0x0804b014        0x7 file_1.o
 
-.data1
- *(.data1)
-                0x0804b01b                        _edata = .
-                [!provide]                        PROVIDE (edata = .)
-                0x0804b01c                        . = ALIGN (ALIGNOF (NEXT_SECTION))
-                0x0804b01b                        __bss_start = .
+    .data1
+    *(.data1)
+                    0x0804b01b                        _edata = .
+                    [!provide]                        PROVIDE (edata = .)
+                    0x0804b01c                        . = ALIGN (ALIGNOF (NEXT_SECTION))
+                    0x0804b01b                        __bss_start = .
 
-.bss            0x0804b01b        0x0
- *(.dynbss)
- *(.bss .bss.* .gnu.linkonce.b.*)
- *(COMMON)
-                0x0804b01b                        . = ALIGN ((. != 0x0)?0x4:0x1)
-                0x0804b01c                        . = ALIGN (0x4)
-                0x0804b01c                        . = SEGMENT_START ("ldata-segment", .)
-                0x0804b01c                        . = ALIGN (0x4)
-                0x0804b01c                        _end = .
-                [!provide]                        PROVIDE (end = .)
-                0x0804b01c                        . = DATA_SEGMENT_END (.)
+    .bss            0x0804b01b        0x0
+    *(.dynbss)
+    *(.bss .bss.* .gnu.linkonce.b.*)
+    *(COMMON)
+                    0x0804b01b                        . = ALIGN ((. != 0x0)?0x4:0x1)
+                    0x0804b01c                        . = ALIGN (0x4)
+                    0x0804b01c                        . = SEGMENT_START ("ldata-segment", .)
+                    0x0804b01c                        . = ALIGN (0x4)
+                    0x0804b01c                        _end = .
+                    [!provide]                        PROVIDE (end = .)
+                    0x0804b01c                        . = DATA_SEGMENT_END (.)
 
-```
-5. Look the cross ref table, it tells which file has which global symbol
-```sh
-OUTPUT(a.out elf32-i386)
+    ```
 
-Cross Reference Table
+5.  Cross Reference Table gave which global symbol taken from which file
+    ```sh
+    OUTPUT(a.out elf32-i386)
 
-Symbol                                            File
-_GLOBAL_OFFSET_TABLE_                             file_1.o
-a                                                 file_2.o
-                                                  file_1.o
-b                                                 file_2.o
-global_code_1                                     file_1.o
-                                                  file_2.o
-```
+    Cross Reference Table
 
-here we noticed address is assigned only for global symbols all the local symbols are handled internally
+    Symbol                                            File
+    _GLOBAL_OFFSET_TABLE_                             file_1.o
+    a                                                 file_2.o
+                                                    file_1.o
+    b                                                 file_2.o
+    global_code_1                                     file_1.o
+                                                    file_2.o
+    ```
 
+**Here we noticed address is assigned only for global symbols all the local symbols are handled internally, and local symbols are only private to that file. so multiple files can have same local symbol name**
+
+6. Check address and scope of symbols used in final executable
 
 ```sh
 $ nm a.out
@@ -548,24 +558,34 @@ Address for variables will be allocated directly
 
 Jump needs calculation
 
-##### .data
+##### .data (file_1.o)
+
+In file_1.o's .data section's relocation table contains symbol of `.text` not `global_code_1` because the symbol is defined in the file, assembler knows the defined section and it's offset, here we need to use the address of `.text`
 
 e9 fe ff ff ff
-    $$\text{Result} = S + A - P$$
-    .data == `0x0804b014` + 3 (offset)
-    symbol (global_code_1) == `08049002`
-    $$\text{Result} = S + A - P = 08049002 + fffffffe  - 804b017=FF FF DF E9$$
-    expected = FF FF DF E7
+$$\text{Result} = S + A - P$$
+- P = .data + (reloc offset) = `0x0804b014` + 3 (offset) = `0x804b017`
+- S = .text == `08049000`
+- A = stored offset = `fffffffe`
+$$\text{Result} = S + A - P = 08049000 + fffffffe  - 804b017=FF FF DF E7$$
 
 ##### .text
+In file_2.o's `.text` section's relocation table contains symbol of `global_code_1` itself, because at the time of assembly assembler don't know the section where it is defined
+
 e9 fc ff ff ff
-    .text=`0x08049010` + 1 (offset)
-    $$\text{Result} = S + A - P = 08049002 + fffffffc  - 08049011=FF FF FF ED$$
+- P = .text + (reloc offset) =`0x08049010` + 1 (offset) = `0x08049011`
+- S = global_code_1 == `08049002`
+- A = `fffffffc`
+$$\text{Result} = S + A - P = 08049002 + fffffffc  - 08049011=FF FF FF ED$$
 
 #### .code
+In file_2.o's `.code` section's relocation table contains symbol of `global_code_1` itself, because at the time of assembly assembler don't know the section where it is defined
+
 e9 fc ff ff ff 
-    .code=`0804a001` + 1 (Offser)
-    $$\text{Result} = S + A - P = 08049002 + fffffffc  - 0804a002=FF FF EF FC$$
+- P = .code + (reloc offset) =`0804a001` + 1 (Offset) = `0x0804a002`
+- S = global_code_1 == `08049002`
+- A = `fffffffc`
+$$\text{Result} = S + A - P = 08049002 + fffffffc  - 0804a002=FF FF EF FC$$
 
 ```sh
 $ objdump -D a.out 

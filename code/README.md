@@ -976,102 +976,7 @@ How to read this `jmp    8 <local_2+0x6>`?
 1. [Jump](./jump.md)
 2. [var](var.md)
 
-## Two Files
-
-### Simple start
-We have two files. Each has its own .text and .data. They don't know the other exists.
-
-```asm
-;file_1.asm
-section .text
-    mov ax, 0x1111
-
-section .data
-    db 0x11, 0x11
-```
-
-```asm
-; file_2.asm
-section .text
-    mov bx, 0x2222
-
-section .data
-    db 0x22, 0x22
-```
-
-```sh
-$ nasm -f elf32 file_1.asm -o file_1.o 
-$ objdump -D file_1.o
-
-file_1.o:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-00000000 <.text>:
-   0:   66 b8 11 11             mov    $0x1111,%ax
-
-Disassembly of section .data:
-
-00000000 <.data>:
-   0:   11 11                   adc    %edx,(%ecx)
-```
-
-```sh
-$ nasm -f elf32 file_2.asm -o file_2.o
-$ objdump -D file_2.o
-
-file_2.o:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-00000000 <.text>:
-   0:   66 bb 22 22             mov    $0x2222,%bx
-
-Disassembly of section .data:
-
-00000000 <.data>:
-   0:   22 22                   and    (%edx),%ah
-```
-
-Both files starting address are starts from `00000000`, it is local to that file only (relative addresse)
-
-
-```sh
-$ ld -m elf_i386 file_1.o file_2.o -o output.elf --verbose
-ld: warning: cannot find entry symbol _start; defaulting to 08049000
-$ objdump -D output.elf
-
-output.elf:     file format elf32-i386
-
-
-Disassembly of section .text:
-
-08049000 <.text>:
- 8049000:       66 b8 11 11             mov    $0x1111,%ax
- 8049004:       66 90                   xchg   %ax,%ax
- 8049006:       66 90                   xchg   %ax,%ax
- 8049008:       66 90                   xchg   %ax,%ax
- 804900a:       66 90                   xchg   %ax,%ax
- 804900c:       66 90                   xchg   %ax,%ax
- 804900e:       66 90                   xchg   %ax,%ax
- 8049010:       66 bb 22 22             mov    $0x2222,%bx
-
-Disassembly of section .data:
-
-0804a000 <__bss_start-0x6>:
- 804a000:       11 11                   adc    %edx,(%ecx)
- 804a002:       00 00                   add    %al,(%eax)
- 804a004:       22 22                   and    (%edx),%ah
-
-```
-
-All the sections are grouped and arranged in the given order, `8049000` is start address
-
-why `8049000` is start address, The short answer is that 0x08049000 is the default base address
-
-
+### [Two Files](./glb_sym.md)
 
 ### LOADADDR
 
@@ -1109,10 +1014,6 @@ rep movsb           ; "Repeat Move String Byte"
 ```
 
 // -----------------------------------
-
-* multiple files, with same label, global, extern
-* 
-
 
 If we use multiple file, like splitting the loggin into multiple files, but we need the binary as single object then in this case we need to use linker
 assembler should not give finished product 
@@ -1286,6 +1187,7 @@ If you can answer these three questions, you've learned the basics:
 **Which of these five areas feels the most "blurry" to you right now? I can dive deep into that specific one.**
 
 TODO 
+0. The call to __x86.get_pc_thunk (PIC Baseline), Accessing Global Data via the GOT, The PLT "Trampoline" (call @plt), Thread-Local Storage (TLS) Access
 1. 
     Ask AI to create a malware (Malware often uses "Position Independent Code" (PIC) or custom loaders to hide its behavior.) and reverse engineer it
 
