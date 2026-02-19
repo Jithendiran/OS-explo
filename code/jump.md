@@ -416,54 +416,247 @@ Disassembly of section .aaa:
 - 401000 - 4 - 40202f = -1033 == FF FF EF CD
 - 401000 - 1 - 40203d = -103E == FF FF EF C2 
 
-### More
+### Far Jumps
 
-In x86 assembly, jumps are generally categorized by **how far** they can go and **how the target address is determined**.
+While Short and Near jumps move within the same code segment, a **Far Jump** changes the Code Segment (`CS`) register itself. 
 
-Beyond the **Short** and **Near** relative jumps we just analyzed, there are three other major categories you should know:
+1. **Direct Far Jump**
+    In a direct far jump, the destination is encoded immediately after the opcode in the instruction stream itself.
+    * **Opcode:** `EA`
+    * **Encoding:** It uses a full 48-bit pointer (16-bit segment selector + 32-bit offset) `ea [4-byte Offset] [2-byte Segment]`. 
+    * **Mechanism**: When the CPU decodes `ea`, it knows the next 6 bytes are not instructions, but the new coordinates for the processor.
+        - The 2 bytes (08 00) are loaded directly into the CS (Code Segment) register.
+        - The 4 bytes (28 90 04 08) are loaded directly into the EIP (Instruction Pointer).
+2. **Indirect Far Jump**
+    The indirect version is more dynamic. Instead of the address being in the code, the code points to a memory location that holds the 6-byte pointer (often called an m16:32 pointer).
 
----
+    * **Opcode:** `FF`
+    * **Encoding:** `ff 2d [4-byte Address of Pointer]`
+    * **Mechanism:** 
+        1. The CPU sees `ff 2d` and looks at the address provided (e.g., 0x804a000).
+        2. It goes to that address.
+        3. It fetches 6 bytes from that location.
+        4. It treats the first 4 bytes as the new EIP and the last 2 bytes as the new CS.
 
-#### 1. Far Jumps (Inter-segment Jumps)
+```asm
+;file_1.asm
+section .data
+    my_far_ptr:
+        dw 0x0000, 0x0000    ; EIP
+        dw 0x0008            ; CS
 
-While Short and Near jumps move within the same code segment, a **Far Jump** changes the Code Segment (`CS`) register itself. These are used in low-level OS development (like switching from Real Mode to Protected Mode).
+section .text
+    global _start
 
-* **Opcode:** `EA`
-* **Target:** It uses a full 48-bit pointer (16-bit segment selector + 32-bit offset).
-* **Behavior:** It doesn't use a relative offset. It tells the CPU: "Go to this specific segment and this specific absolute address."
+_start:
 
----
+    jmp 0x08:label_far      ; direct
+    nop
+    jmp 0x10:0x20
+    
+    mov dword [my_far_ptr], label_indirect
+    mov word  [my_far_ptr + 4], 0x08
 
-#### 2. Indirect Jumps
+    jmp far [my_far_ptr]    ; indirect
 
-In our previous examples, the target was "hardcoded" as a relative value in the instruction. In an **Indirect Jump**, the target address is stored in a register or a memory location.
+label_far:
+    nop
+    ret
 
-* **Examples:**
-* `jmp eax` (Jump to the address currently held in EAX).
-* `jmp [ebx]` (Jump to the address stored at the memory location pointed to by EBX).
+label_indirect:
+    nop
+    hlt
+```
+**Attention**
+1. `mov dword [my_far_ptr], label_indirect`
+    It is moving the address of `label_indirect` to the value pointed by address `my_far_ptr`, word is 2 byte operation and dword is 4 byte operation
+    - `dw 0x0000, 0x0000`    will change to `dw label_indirect_higher, label_indirect_lower`
+2. `mov word  [my_far_ptr + 4], 0x08`
+    It move value `0x08` to the location of `my_far_ptr + 4` 
+    - `my_far_ptr + 4` it points to the `0x0008` of `.data` section
+    - Then it copy the value `0x08` to that memory location
+    - `dw 0x0008` will change to `dw 0x0008`
+
+```sh
+$ nasm -f elf32 file_1.asm -o file_1.o
+$ objdump -D file_1.o
+
+file_1.o:     file format elf32-i386
 
 
-* **Why use them?** They are essential for **switch statements** (using jump tables) and **virtual function calls** in C++. Because the target isn't known until the program is running, the linker doesn't use the  formula here.
+Disassembly of section .data:
 
----
+00000000 <my_far_ptr>:
+   0:   00 00                   add    %al,(%eax)
+   2:   00 00                   add    %al,(%eax)
+   4:   08 00                   or     %al,(%eax)
 
-#### 3. Conditional Jumps (`Jcc`)
+Disassembly of section .text:
 
-These jumps only happen if specific bits in the **EFLAGS** register (like the Zero Flag or Carry Flag) are set.
+00000000 <_start>:
+   0:   ea 28 00 00 00 08 00    ljmp   $0x8,$0x28
+   7:   90                      nop
+   8:   ea 20 00 00 00 10 00    ljmp   $0x10,$0x20
+   f:   c7 05 00 00 00 00 2a    movl   $0x2a,0x0
+  16:   00 00 00 
+  19:   66 c7 05 04 00 00 00    movw   $0x8,0x4
+  20:   08 00 
+  22:   ff 2d 00 00 00 00       ljmp   *0x0
 
-* **Opcodes:** `0x70` through `0x7F` (Short) or `0x0F 0x80` through `0x0F 0x8F` (Near).
-* **Common types:**
-* `je` / `jz`: Jump if Equal / Zero.
-* `jne` / `jnz`: Jump if Not Equal / Not Zero.
-* `jg` / `jl`: Jump if Greater / Less (Signed).
-* `ja` / `jb`: Jump if Above / Below (Unsigned).
+00000028 <label_far>:
+  28:   90                      nop
+  29:   c3                      ret
+
+0000002a <label_indirect>:
+  2a:   90                      nop
+  2b:   f4                      hlt
+
+$ objdump -r file_1.o
+
+file_1.o:     file format elf32-i386
+
+RELOCATION RECORDS FOR [.text]:
+OFFSET   TYPE              VALUE
+00000001 R_386_32          .text
+00000011 R_386_32          .data
+00000015 R_386_32          .text
+0000001c R_386_32          .data
+00000024 R_386_32          .data
+```
+
+#Linker 
+1. `00000001 R_386_32          .text`
+    - As per the relocation record offset address points to `28 00 00 00`, the instruction is `jmp 0x08:label_far` and the relocation points to `label_far`
+    - Here there are  contradiction
+        1. so far we seen jump usually have PC type (`R_386_PC32`) but here it is not PC this is because this instruction going to change the complete value of `CS:EIP` this is not a offset calculation
+        2. `label_far` is local symbol of `.text` section but assembler created a relocation table, this is because again this calculation is not based on offset calculation, `CS:EIP` has to be modified completely, assembler don't know where the `.text` section end up in final memory
+    - Linker calc will be `.text`( base address) + `28 00 00 00` (offset stored)  
+2. `00000011 R_386_32          .data`
+    - It points to `00 00 00 00` of ` c7 05 00 00 00 00 2a`, instruction `mov dword [my_far_ptr], label_indirect`  and relocation for `my_far_ptr`
+    - This is usual part offset 0 of `data`
+    - linker will replace `.data` (address) + `00 00 00 00` (offset)
+3. `00000015 R_386_32          .text`
+    - It points to `2a 00 00 00` of `f:   c7 05 00 00 00 00 2a    ; 16:   00 00 00 `, instruction `mov dword [my_far_ptr], label_indirect` and relocation for `label_indirect`
+    - offset `2a` of `.text` which is `label_indirect` local symbol for `.text`, if value move operation would performed assembeler would not create but address is used here so assembler don't know the address, so it created the recored
+    - Linker will replace `.text`(address) + `2a 00 00 00` (offset)
+4. `0000001c R_386_32          .data`
+    - It points to `04 00 00 00 ` of `66 c7 05 04 00 00 00`
+    - offset `04` of `.data` which is in code `08`
+    - linker will replace `.data` (address) + `04 00 00 00` (offset)
+5. `00000024 R_386_32          .data`
+    - It points to `00 00 00 00` of `22:   ff 2d 00 00 00 00 `, the instruction is   `jmp far [my_far_ptr]`
+    - offset `0` of `.data` is  `my_far_ptr`
+    - linker will replace `.data` (address) + `00 00 00 00` (offset)
+
+if extern global symbol is used with far jump, linker will assign address for each extern global symbol, that symbol will be replaced here ([Refer](./var.md))
+
+```sh
+$ ld -m elf_i386 file_1.o -o file_1.out
+$ objdump -D file_1.out 
+
+file_1.out:     file format elf32-i386
 
 
-* **Note:** In modern x86, conditional jumps can be **Short** (1-byte offset) or **Near** (4-byte offset), but they are **never Far**.
+Disassembly of section .text:
+
+08049000 <_start>:
+ 8049000:       ea 28 90 04 08 08 00    ljmp   $0x8,$0x8049028
+ 8049007:       90                      nop
+ 8049008:       ea 20 00 00 00 10 00    ljmp   $0x10,$0x20
+ 804900f:       c7 05 00 a0 04 08 2a    movl   $0x804902a,0x804a000
+ 8049016:       90 04 08 
+ 8049019:       66 c7 05 04 a0 04 08    movw   $0x8,0x804a004
+ 8049020:       08 00 
+ 8049022:       ff 2d 00 a0 04 08       ljmp   *0x804a000
+
+08049028 <label_far>:
+ 8049028:       90                      nop
+ 8049029:       c3                      ret
+
+0804902a <label_indirect>:
+ 804902a:       90                      nop
+ 804902b:       f4                      hlt
+
+Disassembly of section .data:
+
+0804a000 <my_far_ptr>:
+ 804a000:       00 00                   add    %al,(%eax)
+ 804a002:       00 00                   add    %al,(%eax)
+ 804a004:       08 00                   or     %al,(%eax)
+```
+
+`.text = 08049000`, `.data = 0804a000`
+
+1. `00000001 R_386_32          .text` = `08049000` + `28` = `08049028`
+2. `00000011 R_386_32          .data` = `0804a000` + `00` = `0804a000`
+3. `00000015 R_386_32          .text` = `08049000` + `2a` = `0804902a`
+4. `0000001c R_386_32          .data` = `0804a000` + `04` = `0804a004`
+5. `00000024 R_386_32          .data` = `0804a000` + `00` = `0804a000`   
 
 
-#### jump bwtween 2 files
+#### Register jumps
+This is more like indirect far jumps
 
-#### A Quick Tip on Optimization
+```asm
+;file_1.asm
+section .text
 
-The CPU is very good at predicting **Relative Jumps** because the target is static. **Indirect Jumps** are harder for the CPU to predict (look up "Branch Prediction"), which is why deep inheritance in C++ or massive switch statements can sometimes slow down a high-performance loop!
+    jmp eax             ; EIP = eax
+    nop
+    jmp [eax]           ; EIP = [eax], eax is address, cpu get the value from address and store to EIP
+    nop
+    jmp [eax + 4]       ; EIP = [eax+4]
+    nop
+    jmp [ebx + eax*4]
+    nop
+    jmp far [eax]       ; EIP = [eax], CS = [eax+4]
+    nop
+```
+
+
+```sh
+objdump -D file_1.o
+
+file_1.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <.text>:
+   0:   ff e0                   jmp    *%eax
+   2:   90                      nop
+   3:   ff 20                   jmp    *(%eax)
+   5:   90                      nop
+   6:   ff 60 04                jmp    *0x4(%eax)
+   9:   90                      nop
+   a:   ff 24 83                jmp    *(%ebx,%eax,4)
+   d:   90                      nop
+   e:   ff 28                   ljmp   *(%eax)
+  10:   90                      nop
+
+
+$ objdump -r file_1.o
+
+file_1.o:     file format elf32-i386
+
+$ ld -m elf_i386 file_1.o -o file_1.out
+$ objdump -D file_1.out 
+
+file_1.out:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+08049000 <__bss_start-0x1000>:
+ 8049000:       ff e0                   jmp    *%eax
+ 8049002:       90                      nop
+ 8049003:       ff 20                   jmp    *(%eax)
+ 8049005:       90                      nop
+ 8049006:       ff 60 04                jmp    *0x4(%eax)
+ 8049009:       90                      nop
+ 804900a:       ff 24 83                jmp    *(%ebx,%eax,4)
+ 804900d:       90                      nop
+ 804900e:       ff 28                   ljmp   *(%eax)
+ 8049010:       90                      nop
+```
+There is no relocation entry for these registers jumps 
