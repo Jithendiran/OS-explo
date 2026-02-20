@@ -978,6 +978,9 @@ How to read this `jmp    8 <local_2+0x6>`?
 
 ### [Two Files](./glb_sym.md)
 
+### [c and nasm](./c.md)
+
+
 ### LOADADDR
 
 LOADADDR(.section_name) is a built-in linker function that returns the LMA (the physical storage address) of a section.
@@ -1013,180 +1016,9 @@ rep movsb           ; "Repeat Move String Byte"
                     ; This physically moves the data from Flash to RAM
 ```
 
-// -----------------------------------
-
-If we use multiple file, like splitting the loggin into multiple files, but we need the binary as single object then in this case we need to use linker
-assembler should not give finished product 
-Labels: Kept as names for the linker to see.
-Sections: Flexible; can be moved by the linker.
-Output: Needs a linker to become a program.
-Multi-file: Standard way to build large projects.
-
-The 3 Main Jobs of a Linker
-A. Combining Files (Merging)
-You might have code in one file and variables in another. The linker glues all the .text (code) sections together and all the .data (variables) sections together into one big file.
-
-B. Resolution (Finding the Address)
-In your code, you wrote mov dx, msg.
-When you assembled the file, the assembler didn't know where msg would eventually live in the computer's memory. It just left a blank spot and a note saying: "Hey Linker, put the address of 'msg' here later."
-The Linker finds out exactly where msg ended up and fills in that blank spot.
-
-C. Relocation (Adjusting for the Start Line)
-The Linker decides the "Base Address" (the starting point) of your program.
-The Linker comes along. By default, Linux linkers like to start programs at a huge address, like 0x08048000 (an 8-digit number).
-
-
-$ld -m elf_i386 -e start_logic -Ttext 0x100 display.o -o final_output.bin --oformat binary
-ld: warning: cannot find entry symbol start_logic; defaulting to 00000100
-
-
-In a raw binary, there is no "main" function header. The CPU simply executes the first byte it finds. However, the Linker still needs to know where to start arranging your code sections.
-
-Tip: Ensure the file containing your startup logic is listed first in the ld command.
-
-```
-When you ran this: ld -m elf_i386 -e start_logic -Ttext 0x100 ...
-
--m elf_i386: "We are building for a 32-bit system (even if we are using 16-bit logic)."
-
--e start_logic: "The front door of the program is the label named start_logic."
-
--Ttext 0x100: "Start the code at memory address 256 (0x100)." Because 256 is a small number, it fits in your 16-bit DX register, and the error disappears.
-
---oformat binary: "Don't add any fancy headers. Just give me the raw machine code."
-```
-
-jidesh@jidesh-MS-7E26:/tmp/pgm/asm$ hexdump -C final_output.bin 
-00000000  ba 00 10 b4 09 cd 21 c3  00 00 00 00 00 00 00 00  |......!.........|
-00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-*
-00000f00  48 65 6c 6c 6f 20 57 6f  72 6c 64 24 00           |Hello World$.|
-00000f0d
-jidesh@jidesh-MS-7E26:/tmp/pgm/asm$ 
-
-Linker Script
-While the Linker (ld) does the heavy lifting of joining files, the Linker Script tells it exactly where in the computer's memory those files should be placed. Without a script, the linker uses a "default" layout
-
-```
-/* 1. Define the Entry Point */
-ENTRY(start_logic)
-
-/* 2. Define Memory Regions (Optional but helpful) */
-MEMORY
-{
-    ram (rwx) : ORIGIN = 0x0000, LENGTH = 64K
-}
-
-/* 3. Define the Sections Map */
-SECTIONS
-{
-    . = 0x7C00;      /* Set the Location Counter to a specific address */
-
-    .text : {        /* Put all code (.text) here */
-        *(.text)    
-    }
-
-    .data : {        /* Put all variables (.data) here */
-        *(.data)
-    }
-
-    .bss : {         /* Put uninitialized data here */
-        *(.bss)
-    }
-}
-```
-
-The dot (.) is the most important symbol in a linker script. It represents the current memory address.
-. = 0x1000;, you are telling the linker: "The very next byte of code should be placed at address 0x1000."
-As the linker adds code, the dot automatically increases.
-
-*(.text): The asterisk is a wildcard. It means "Take the .text section from all input files and put them here."
-
-ENTRY: This tells the linker which label is the "Front Door" of your program. In your case, it would be ENTRY(start_logic). This ensures that even if you have 100 functions, the CPU knows which one to run first.
-
-MEMORY (The Hardware Map)
-This section is common in Embedded Systems or OS Development. It describes the physical hardware.
-It tells the linker: "The Flash memory starts at X, and the RAM starts at Y."
-
-```
-/* linker.ld */
-OUTPUT_FORMAT(binary)
-SECTIONS
-{
-    . = 0x7C00;        /* Start address (common for bootloaders) */
-    .text : { *(.text) }
-    .data : { *(.data) }
-}
-```
-
-ld -T linker.ld display.o -o final_output.bin
-
-
-
-
-------------------
-To truly master linkers, you need to stop thinking of them as "part of the compiler" and start seeing them as the **Project Manager** that organizes memory.
-
-Here is a logical roadmap of the concepts you should cover, in order, to go from "truncated error" to "expert":
-
----
-
-### 1. The Object File (The Input)
-
-Before you link, you have `.o` files. You need to understand what's inside them besides just code.
-
-* **Sections:** What exactly is the difference between `.text`, `.data`, `.rodata`, and `.bss`?
-* **The Symbol Table:** How the assembler keeps a list of names (like `msg` or `start_logic`) but doesn't know their addresses yet.
-* **Relocation Entries:** The "To-Do" list the assembler leaves for the linker (e.g., *"Please fill in the address for DX here later"*).
-
-### 2. Symbol Resolution
-
-This is the process of "matching."
-
-* **Global vs. Local:** Why can the linker see `_start` but not a local label?
-* **Undefined References:** What happens when you call a function that doesn't exist?
-* **Strong vs. Weak Symbols:** What happens if you define the variable `x` in two different files? (The linker has to choose one).
-
-### 3. The Relocation Process (The Core)
-
-This is where your previous error lived.
-
-* **Section Merging:** How the linker takes `.text` from `math.o` and `display.o` and glues them into one continuous block.
-* **Calculating Addresses:** How the linker finally decides that `msg` is at exactly `0x7C0A`.
-* **Patching:** The act of the linker physically writing that `0x7C0A` into the machine code of your binary.
-
-### 4. Memory Layout & Linker Scripts
-
-This is the "Architect" phase.
-
-* **The Location Counter (`.`):** Mastering how to move the "cursor" in memory.
-* **VMA vs. LMA:** * **VMA (Virtual Memory Address):** Where the code runs.
-* **LMA (Load Memory Address):** Where the code is stored (very important for burning code to ROM/Flash).
-
-
-* **Alignment:** Why some data *must* start at an address divisible by 4 or 16.
-
-### 5. Executable Formats
-
-The "wrapper" around your code.
-
-* **ELF (Linux):** Complex, has headers and tables.
-* **Flat Binary (`.bin`):** No headers, just raw instructions (what you are using now).
-* **Entry Points:** How the OS knows the very first instruction to execute.
-
----
-
-### Summary Checklist for You
-
-If you can answer these three questions, you've learned the basics:
-
-1. Why does the Assembler leave "holes" in the machine code?
-2. How does a Linker Script prevent addresses from being too large for a register?
-3. What is the difference between a Symbol and a Section?
-
-**Which of these five areas feels the most "blurry" to you right now? I can dive deep into that specific one.**
 
 TODO 
+
 0. The call to __x86.get_pc_thunk (PIC Baseline), Accessing Global Data via the GOT, The PLT "Trampoline" (call @plt), Thread-Local Storage (TLS) Access
 1. 
     Ask AI to create a malware (Malware often uses "Position Independent Code" (PIC) or custom loaders to hide its behavior.) and reverse engineer it

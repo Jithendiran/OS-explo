@@ -401,6 +401,18 @@ When the Control Unit decodes the HLT instruction, it enters a special Halt Stat
 
 * It won't lose data stored in registers
 
+### Bus Control Terminology
+
+| Terminology | Simple Meaning | Doer (Initiator) | Recipient (Target) | Example Statement | Explanation of Roles |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Latch** | To **capture and hold** a changing value (like an address) at a specific moment. | External **Latch Circuit** (e.g., 8282 chip) | Memory or I/O device | "The external latch circuit must **latch** the address during T1." | **Doer:** The Latch circuit physically captures the data. **Recipient:** The captured address is for the Memory chip's use. |
+| **Strobe** | A brief, timed **signal pulse** used to trigger an action (specifically the latching of data/address). | **CPU** (e.g., the $\text{ALE}$ pin) | External Latch Circuit | "The CPU **strobes** the $\text{ALE}$ signal HIGH to indicate the address is ready." | **Doer:** The CPU sends the timing signal. **Recipient:** The Latch circuit receives the signal and performs the latching action. |
+| **Assert** | To **activate** a signal by driving the pin to its active voltage level (usually Low for 8086 control signals). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **asserts** the $\text{RD}'$ signal to start a memory read." | **Doer:** The CPU sets the pin to the active state (LOW). (In this example it is LOW, for some other operations it will be HIGH. It depends on the pins, here activate doesn't mean power up, it means process has to start. Some operation will start on low signal, some on high) **Recipient:** The Memory chip sees the signal and prepares to output data. |
+| **Deassert** | To **deactivate** a signal by driving the pin to its inactive voltage level (usually High). | **CPU** (or sometimes DMA/Peripheral) | Recipient Chip (Memory/I/O) | "The CPU **deasserts** the $\text{WR}'$ signal to complete the write operation." | **Doer:** The CPU releases the pin back to the inactive state (HIGH). **Recipient:** The Memory chip stops transferring data and saves the value. |
+| **Sample** | To **read (check)** the current logical state (High or Low) of an input signal at a precise moment. | **CPU** | External Device Signal (e.g., $\text{READY}$) | "The CPU **samples** the $\text{READY}$ line near the end of $\text{T3}$." | **Doer:** The CPU performs the internal reading operation. **Recipient:** The $\text{READY}$ signal from the external device provides the information. |
+| **Drive** | To actively **apply a voltage** (High or Low) to a bus line, essentially "putting data or address onto the bus." | **CPU** or **Memory/I/O** | The Bus (Data or Address) | "The Memory chip **drives** the requested data onto the Data Bus." | **Doer:** The Memory chip actively places the electrical signals on the bus wires. **Recipient:** The CPU is the ultimate recipient, waiting to read the data from the bus. |
+| **Tri-State / High Impedance** | To electrically **disconnect** a chip from the bus lines, making its pins appear as open circuits. | **CPU or Memory/I/O** |The Bus (Data or Address) | "When $\text{HLDA}$ is asserted, the CPU enters tri-state on the bus lines." |**Doer**: The chip (CPU/Memory/I/O) internally turns off its output drivers. **Recipient**: The Bus is freed, allowing another chip (like the DMA Controller) to take over as the driver. |
+
 ## Refer
 
 * [Code: The Hidden Language of Computer Hardware and Software](https://www.amazon.in/Code-Language-Computer-Hardware-Software/dp/0137909101)
