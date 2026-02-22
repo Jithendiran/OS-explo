@@ -40,29 +40,10 @@ This group covers non-bus-cycle controls, arbitration, and interrupts.
       
       Non-Maskable Interrupt (Input): A high-priority interrupt that is edge-triggered and cannot be ignored by the CPU. It is reserved for critical events like power failure. The CPU vector is fixed at address $00008\text{H}$.
 
-            An edge-triggered circuit or interrupt is activated only by a transition (a rapid change in voltage) of the input signal.
-
-            Trigger Event: The circuit reacts only at the moment the signal changes state.
-
-            Rising Edge (Positive Edge): The transition from a logic LOW (0V, or near 0V) to a logic HIGH (e.g., +5V).
-
-            Falling Edge (Negative Edge): The transition from a logic HIGH to a logic LOW.
-
-            Behavior: Once the circuit is triggered by the edge, it will only react again if another edge (another transition) occurs. The duration of the high or low level after the trigger does not keep it active.
 
     * $\text{INTR}$ (Pin 18):
       
       Interrupt Request (Input): A general-purpose, level-triggered, and maskable interrupt. The CPU only processes it if the Interrupt Flag ($\text{IF}$) is set. It requires an external Interrupt Controller (e.g., 8259A).
-
-            A level-triggered circuit or interrupt is activated by the presence of a specific voltage level on the input signal.
-
-            Trigger Event: The circuit is active for the entire duration that the signal is held at the specified logic level.
-
-            High-Level Triggering: Active as long as the signal is at logic HIGH.
-
-            Low-Level Triggering: Active as long as the signal is at logic LOW.
-
-            Behavior: The circuit remains active (or continues to request attention) for as long as the signal remains at the activating level. The device generating the signal must de-assert (clear) the signal to end the trigger.
 
     * $\overline{\text{INTA}}$ (Pin 24): **Interrupt Acknowledge** output (responds to $\text{INTR}$).
 
@@ -158,6 +139,6 @@ This is the central group for managing all memory and I/O transfers, including t
             | 1 | 0 | CS or no-segment |
             | 1 | 1 | DS | 
 
-        - : Status bit reflecting the state of the Interrupt Enable Flag ($\text{IF}$).
+        - $\text{S5}$: Status bit reflecting the state of the Interrupt Enable Flag ($\text{IF}$).
 
         - $\text{S6}$: Status bit which is always low (0), confirming the 8086 is the bus master.

@@ -203,7 +203,9 @@ To get more info on debug follow the steps after gdb connection
 
 `(gdb) dash16`
 
-### 7. Basic PIC Setup
+### 7. Basic Hardware Setup
+
+**PIC(Programmable Interrupt Controller)**
 
 In 8086 interrupts are calssified as
 
@@ -284,14 +286,3 @@ Flow
 4. The Video Card's hardware logic then constantly reads that internal memory to generate the VGA signal (pixels) for your monitor.
 
 [refer](./mmio.asm)
-
-### 9. Simple Timer Interrupt
-        switch between 2 tasks
-        use 2 c programs
-
-### 10. Custom BIOS
-[Bios](./bios.asm) 
-
-## Refer
-
-https://grandidierite.github.io/bios-interrupts/

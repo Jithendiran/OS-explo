@@ -107,7 +107,7 @@ The 8086 CPU has default segment registers associated with certain types of memo
 
 | Memory Access Type | Default Segment Register |
 | :--- | :--- |
-| **Data Access** (General variables, `MOV`, `ADD`, etc., using memory address) | **$DS$ (Data Segment)** |
+| **Data Access** (General variables, `MOV`, `ADD`, etc., using memory address) | $DS$ (Data Segment) |
 | **Code Access** (Instruction fetch) | $CS$ (Code Segment) |
 | **Stack Access** (`PUSH`, `POP`, accessing data relative to $BP$ or $SP$) | $SS$ (Stack Segment) |
 | **Destination String** (String operations, `MOVSB`, `STOSB`, etc.) | $ES$ (Extra Segment) |
@@ -125,6 +125,40 @@ These registers typically hold the **Offset Address** within a segment.
 | **BP** | **Base Pointer** | Holds an offset in the **SS** segment, often used to access parameters/local variables on the stack. | **SS** |
 | **SI** | **Source Index** | Holds the offset of the **source** data in string operations. | **DS** |
 | **DI** | **Destination Index** | Holds the offset of the **destination** data in string operations. | **ES** |
+
+SI - Source Index
+
+DI - Destination Index
+
+These are implicit opcodes registers, CPU will increment / decrement automatically based on cx is greater than 0
+
+CS 
+- Code segment  <-- IP
+- CS:IP
+
+DS 
+- Data segment  <-- [reg], [ptr], SI
+- DS:reg, DS:[reg], DS:[ptr], DS:SI
+- mov ax, [si] -> CPU uses ds:si
+- mov ax, [bx] -> DS:BX
+
+By default, the CPU assumes any data you want to read or write lives in the Data Segment. SI is the "Source Index," used specifically when you are reading data to move it somewhere else.
+
+ES - Extra segment <-- DI
+
+
+Whether DI (Destination Index) uses DS or ES depends entirely on the instruction:
+- General Move (mov ax, [di]): The CPU defaults to DS:DI. In a standard move, DI behaves just like SI or BX.
+- String Operations (MOVS, STOS, CMPS): This is where it changes. For these specific instructions, the hardware is hard-wired to use ES:DI.
+- MOVSB copies a byte from DS:SI to ES:DI.
+- Note: Unlike other registers, the ES requirement for DI in string operations cannot be overridden with a prefix. The destination must be in the Extra Segment.
+
+SS - Stack segment <-- SP, BP
+mov ax, [bp] -> CPU uses ss:bp
+
+DS = 0x1234
+DX = 0x0005
+1234:0005 -> 0x12345
 
 ### Flag Register
 
@@ -231,41 +265,6 @@ The 8086 has dedicated pins that external hardware devices use to signal an inte
     * CPU Exceptions: The Execution Unit (EU) detects error conditions during an instruction's execution, such as a divide-by-zero (Type 0) or an attempt to use the INTO instruction when the Overflow Flag (OF) is set (Type 4).
 
 
-### How the CPU Identifies the Interrupt Type
-
-Once the CPU detects an interrupt, it needs to know which of the 256 possible handlers it should jump to. This is done by obtaining an 8-bit number called the Interrupt Type Number (or Vector Number)
-
-| Interrupt Source | How the CPU Gets the Type Number |
-| :--- | :--- |
-| **Software (`INT n`)** | The number $n$ is part of the instruction itself (e.g., in `INT 13H`, the type is $13\text{H}$). |
-| **NMI** | This is a fixed, non-programmable interrupt **Type 2**. |
-| **Exceptions (e.g., Divide Error, single/Step trap,..)** | These are fixed, dedicated types wired into the CPU's internal logic (e.g., Divide Error is always **Type 0**, Trap is **Type 1**). |
-| **Maskable Hardware (`INTR`)** | After the CPU acknowledges the interrupt by pulsing the **$\overline{INTA}$ (Interrupt Acknowledge)** pin, the external **Programmable Interrupt Controller (PIC)** (like the 8259A chip) places the 8-bit interrupt type number onto the data bus for the CPU to read. |
-
-Once the CPU has the Type Number, it calculates the address of the corresponding Interrupt Service Routine (ISR) using the Interrupt Vector Table (IVT):
-$$\text{IVT Address} = \text{Type Number} \times 4$$
-
-### How the NMI Differentiates Sources
-
-The differentiation is achieved by making the **ISR for Type 2** a "master" routine that uses software to inspect the system's external hardware registers to determine the *exact* cause of the interrupt.
-
-#### Step 1. External Hardware Latching
-
-* The **NMI pin** on the 8086 is a *single input*. When any critical event occurs (memory error, power monitor trip, etc.), the external circuitry is designed to send a signal to this single NMI pin.
-* The hardware that detected the fault (e.g., a memory controller for parity, a voltage monitor for power) also **latches** the status of the fault in a dedicated **Status Register** located at an I/O port address.
-
-#### Step 2. The NMI-ISR Polling Routine
-
-When the CPU receives the NMI:
-
-1.  The CPU executes its built-in NMI procedure, which pushes registers to the stack and jumps to the single, fixed **Type 2 ISR** address ($00008H$).
-2.  The **Type 2 ISR** begins execution. The first thing it does is **read the external Status Register** via an I/O port instruction (like `IN`).
-3.  The ISR then **checks the bits** in that Status Register:
-    * If bit 0 is set, it might mean a **Memory Parity Error**.
-    * If bit 1 is set, it might mean a **Power Fail Warning**.
-    * And so on.
-4.  Based on the status bits it reads, the ISR branches to the appropriate **sub-routine** to handle the specific fault (e.g., start a graceful shutdown for a power failure, or halt the system for a fatal memory error).
-
 
 ### What Registers are Saved?
 The 8086 CPU automatically saves only the minimum context required to ensure the correct return to the interrupted program: FLAG, CS:IP
@@ -332,66 +331,7 @@ TF ($\text{Trap Flag}$) and $\text{INT 3}$ are both mechanisms used on the x86 a
 * Explicit instruction inserted into the code by a debugger or programmer. Sets a Software Breakpoint, Execution proceeds normally until the instruction is hit.
 * Explicitly triggers the Breakpoint Exception (Interrupt Vector $\text{3}$) when the instruction is executed.
 
-## Device communication
-
-### 1. Interrupt IO
-
-When a device want to notify cpu, it will raise a interrupt (eg:,.Keyboard)
-
-### 2. I/O Port Access (Port-Mapped I/O)
-
-This is a method where the CPU communicates with a device's registers (control, status, or data) using a dedicated, separate address space called the I/O space. This is the classic method used by many legacy devices in the x86 architecture (like the PIC, PIT, and old Serial/Parallel ports).
-
-* Mechanism: The CPU uses special, dedicated instructions
-    - OUT (to write data to an I/O port)
-    - IN (to read data from an I/O port)
-* Address Space: The I/O space is physically separate from the main memory space. The x86 architecture supports $2^{16} = 65,536$ I/O ports, addressed by 16 bits (from $0x0000$ to $0xFFFF$). I/O address space are not actual memory cells, but logical addresses that the CPU uses to point to a specific register on an I/O device.
-* CPU Action: When the CPU executes an IN or OUT instruction, it asserts a special control line (like the $M/\overline{IO}$ pin on the 8086), telling the bus system that the address on the address bus refers to an I/O port, not a memory location.The Motherboard's I/O Controller has the 1 byte of storage, from where cpu reads
-* Pros: Keeps memory and I/O logic separate; simplifies address decoding for I/O devices.
-* Cons: Requires special instructions; access is slower than memory access and often more limited in flexibility.
-
-Physical Device: when doing reading/writing we are doing operation on register or buffer located inside a specialized I/O Controller chip (like the $\mathbf{8259A\ PIC}$, the $\mathbf{8253\ Timer}$, or the $\mathbf{Keyboard\ Controller}$).
-
-### Memory-Mapped I/O (MMIO)
-This is a method where the registers of a peripheral device are mapped into the CPU's main memory address space. The CPU treats these device registers exactly as if they were RAM
-
-* Mechanism: The CPU uses standard memory access instructions:
-    - MOV (to read or write)
-    - Any other instruction that accesses a memory location.
-* Address Space: I/O device registers are assigned a unique, reserved range of physical memory addresses (e.g., the VGA Framebuffer is often at $0xA0000$ or higher). This range is marked as non-RAM.
-* CPU Action: When the CPU executes a standard MOV instruction to a MMIO address, the bus system (or chipset) intercepts the request. Instead of routing the read/write operation to RAM chips, it routes the signal to the peripheral device that is listening for that specific address range.
-So the RAM address are just a place holder, if we write or read on that location means we are not doing from RAM, actualling doing it on the device registers or storage
-* Pros: Unified programming model (use all standard memory instructions); easier for compilers; generally faster access than I/O Ports
-* Cons: Consumes a portion of the limited physical memory address space (less of an issue on 32-bit and 64-bit systems); requires careful handling (e.g., disabling caching) to ensure reads/writes hit the device registers immediately. Storage cells in these are not usable
-
-Physical device: when doing reading/writing we are doing operation on specialized buffer (like $\mathbf{Video\ RAM\ (VRAM)}$) or a $\mathbf{ROM\ (Read-Only\ Memory)}$ chip. The data (comes from/ goes to) the memory contained within those specific chips.
-
-When you $\mathbf{MOV\ AL, [B8000\text{H}]}$ (accessing text mode video memory), you are reading from the VRAM chip on the graphics card, not the main system DRAM/SRAM chips.
-
-### Direct Memory Access (DMA)
-DMA is a hardware mechanism that allows a peripheral device to read data from or write data to main memory directly, without involving the CPU in the actual data transfer process.
-* Purpose: To offload high-volume, high-speed data transfers (like disk or network traffic) from the CPU, significantly improving system throughput and efficiency.
-* Key Component: The DMA Controller (DMAC). This is a dedicated chip (like the 8237 in legacy systems) or built-in logic in modern chipsets/devices that orchestrates the transfer.
-* CPU Involvement: Only for the initial setup and handling the final completion interrupt. When DMA complete it's work CPU will be notified
-
-When DMA is doing the working, it is going to take complete control over the system bus so CPU has to be idel, Then what make DMA powerfull is CPU mov from disk max of 2 bytes, but DMA can handle in KB
-
-When the DMA controller needs to transfer data, it must gain control of the system buses. The DMA controller doesn't necessarily take control of all CPU registers (like $AX, BX, CX,$ etc.); it takes control of the essential pathways:
-
-* Address Bus: Used to specify the memory location.(Pins $\text{A0}$ through $\text{A19}$)
-* Data Bus: Used to transfer the actual data. (Pins $\text{D0}$ through $\text{D7}$ or $\text{D15}$)
-* Control Bus: Used to manage read/write operations. (Pins like $\text{RD}'$ (Read) and $\text{WR}'$ (Write))
-
-During this period (while the DMA is using the bus), the CPU cannot access memory or I/O ports. Consequence: Since instruction fetching and execution heavily rely on accessing memory, the CPU is effectively IDLE (stalled/halted) and cannot run any part of the program.
-
-While the CPU is idled by the DMA controller taking the buses, it is only paused from executing instructions that require bus access. The CPU itself is still powered on and internally active.
-
-- Internal Operations: The CPU can still perform internal operations that do not require the bus. This includes things like:
-- Simple register-to-register operations (e.g., $MOV AX, BX$).
-- Arithmetic/Logical Operations on data currently held in its internal registers (e.g., $ADD AX, 10H$).
-- Instruction Pre-fetch Queue: The 8086 has a 6-byte instruction pre-fetch queue. If the queue is full and the transfer is short, the CPU can continue executing instructions from its queue for a brief moment until it needs to fetch a new instruction from memory.
-
-[Flow](./DMA.md)
+[DMA](./DMA.md)
 
 
 ## Boot device/disk
@@ -409,5 +349,3 @@ BIOS always place boot MBR code from `0x07c00` memory location
 To execute  `qemu-system-i386 -fda /tmp/boot.img`
 
 [Programs](./program/README.md)
-
-https://www.minuszerodegrees.net/5150/misc/5150_motherboard_diagrams.htm

@@ -1,5 +1,28 @@
 # I/O controller
 
+MPUs like the 6502 have only 3 vector addresses (RESET, NMI, and INTR). Only INTR is used for device interaction. When a device sends an interrupt, the MPU always goes to a single fixed INTR vector address and executes the Interrupt Service Routine (ISR). That ISR must identify which device raised the interrupt. The device will drive the INTR pin until the MPU acknowledges.
+
+Why the device must drive the pin until MPU ACK:
+1. Interrupt Masking: If a device raises the signal only once while interrupts are masked, the MPU will miss it.
+2. Identification: If the signal is raised only once (It can raise in any cycle T1-T4, but MPU watch the INTR only during end of T4), the MPU will be unable to find which device raised the interrupt during polling.
+
+The 8086 can access up to 256 interrupts. Because it supports a large number of interrupts rather than a single fixed address, the device that raised the interrupt (or the interrupt controller) must provide an 8-bit offset address.
+
+The 8086 treats this 8-bit value as a vector type (index). It uses this index to look up the specific location in the Interrupt Vector Table (IVT). It then jumps to the ISR location mentioned in that table for execution.
+
+You have the logic correct. The 8086 handles interrupts more dynamically than the 6502 by using a vectored approach instead of a single fixed address.
+
+
+### The 8086 Flow:
+
+* **Request:** A device asserts the INTR pin.
+* **First INTA:** The CPU finishes the current instruction and sends the first **INTA** pulse to signal the controller that the request is accepted.
+* **Vector Transfer:** The CPU sends a second **INTA** pulse. In response, the interrupt controller places an **8-bit vector number** (0-255) on the data bus.
+* **Address Calculation:** The CPU multiplies this 8-bit vector by 4 to find the starting address in the Interrupt Vector Table (located at ).
+* **Jump:** The CPU loads the New IP (Instruction Pointer) and CS (Code Segment) from that table location and jumps to the ISR.
+* **Completion:** After completion, the CPU must acknowledge the I/O controller that the operation is finished. Only then will the I/O controller watch for other interrupts.
+
+
 I/O Controller (or Device Controller) is a separate hardware component or dedicated integrated circuit (IC) from the CPU and main RAM
 
 It acts as an interface or mediator between the fast, standard system bus (which the CPU and RAM use) and the slower, specialized peripheral device (like a keyboard, disk drive, or network card).
@@ -16,8 +39,6 @@ In an 8086-based system, the I/O controllers are implemented using specialized, 
 * **8255 Programmable Peripheral Interface (PPI):** A general-purpose IC used to provide flexible parallel I/O ports.
 * **8259 Programmable Interrupt Controller (PIC):** Manages interrupt requests from multiple I/O devices.
 * **8251 Universal Synchronous/Asynchronous Receiver/Transmitter (USART):** Used for serial communication.
-
-The 8259 Programmable Interrupt Controller (PIC) is not a general I/O controller, but a specialized peripheral chip to which other I/O controllers (or their devices) are connected.
 
 The typical **buffer storage** in an I/O controller or device interface is usually a small amount of **dedicated, fast memory** designed to hold data temporarily during the transfer between the peripheral device and the system bus (CPU/RAM).
 
@@ -37,19 +58,8 @@ The buffer is usually implemented using fast, on-chip memory technologies:
 * **Registers:** For the smallest buffers, they are simply part of the **control and status registers** of the I/O chip.
 * **SRAM (Static RAM):** For larger, faster buffers, the controller IC uses **SRAM** because it is faster than the main DRAM (Dynamic RAM) used for system memory, ensuring the controller can keep up with the burst speed of the system bus.
 
-### 3. Purpose: Decoupling and Speed Matching
-
-The primary function of the buffer is **decoupling** the two sides:
-
-| Side | Characteristic | Role of Buffer |
-| :--- | :--- | :--- |
-| **Peripheral Device** | **Slow and Asynchronous** (data comes or goes when ready, e.g., a keypress). | The buffer **accepts bursts of data** from the system bus and holds it while the slow peripheral processes it (Write operation), or collects slow data from the peripheral and holds it until the system bus is ready for a fast transfer (Read operation). |
-| **CPU/System Bus** | **Fast and Synchronous** (data must be transferred within the $\text{T3/T4}$ states of a bus cycle). | The buffer ensures **data is immediately available** for the CPU on a read, preventing the need for excessive $\mathbf{T_W}$ (wait states) caused by the slow peripheral. |
-
 
 ## 8086 Minimum Mode Interrupt Processing Flow
-
-In Minimum Mode, the **8086 CPU directly outputs** the $\overline{\text{INTA}}$ signal, as that pin is dedicated for this function (Pin 24) instead of being the $\overline{\text{QS}1}$ pin as in Maximum Mode.
 
 
 ### Phase 1: Signal Generation
@@ -57,7 +67,7 @@ In Minimum Mode, the **8086 CPU directly outputs** the $\overline{\text{INTA}}$ 
 | Action | Doer | Pins Involved | Note |
 :--- | :--- | :--- | :--- |
 | Physical Event | Keyboard/Mouse | $\text{N/A}$ | Keystroke occurs. |
-| Data Deposit | I/O Controller | $\text{I/O Data register}$ | Scan Code is stored in the peripheral's I/O Port. |
+| Data Deposit | I/O Controller | $\text{I/O Data register}$ | Scan Code is stored in the peripheral's I/O Register. |
 | Interrupt Request | I/O Controller | $\mathbf{\text{IRQ}n}$ (e.g., $\text{IRQ1}$) | The I/O controller asserts its specific **Interrupt Request** line to the $\mathbf{8259\text{A PIC}}$. |
 | CPU Notification | 8259A PIC | $\mathbf{\text{INTR}}$ (CPU Pin 18) | The PIC drives the $\mathbf{\text{INTR}}$ pin **HIGH**, signaling the CPU that a device needs service. |
 
@@ -73,7 +83,6 @@ The CPU, upon recognizing the $\text{INTR}$ and completing its current instructi
 | Acknowledge Output | 8086 CPU | $\mathbf{\overline{\text{INTA}}}$ (Pin 24) | Driven **LOW** to the **PIC**, telling it: "I hear you." | The 8086 itself asserts the $\overline{\text{INTA}}$ pin .  |
 | I/O Indicator | CPU | $\text{M}/\overline{\text{IO}}$ | **LOW** (I/O operation). | Indicates that the transfer involves an I/O device (the PIC). |
 | Data Bus | CPU | $\text{D0-D15}$ | **Tri-stated** (off). | Bus is not used to transfer data in this first cycle. |
-| Synchronization | 8259A PIC | $\text{READY}$ | PIC may drive $\text{READY}$ **LOW** to insert Wait states. | Standard bus cycle timing remains, allowing for Wait states. |
 
 
 #### **Cycle 2: Fetch Interrupt Vector**
@@ -125,60 +134,6 @@ This is done by issuing an End of Interrupt (EOI) command from the CPU to the 82
 
 Without the EOI command, the PIC would be unable to properly process future interrupts.
 
-## Complete NMI Flow
+## NMI Flow
 
-The $\text{NMI}$ flow is much simpler and faster because the key difference is that $\text{NMI}$ requires zero external bus cycles for acknowledge ($\overline{\text{INTA}}$ is not involved), as the vector number (Type 2) is hardwired inside the CPU.
-
-### Phase 1: Signal Detection (Hardware Level)
-
-| Action | Doer | Pins Involved | Significance |
-| :--- | :--- | :--- | :--- |
-| Physical Event | External Circuitry | $\text{NMI}$ (Pin 17) | An event like a memory parity error or power failure asserts the $\text{NMI}$ pin with a **Low-to-High** transition. |
-| NMI Detection | 8086 CPU | $\text{NMI}$ | The CPU samples the $\text{NMI}$ pin at the end of the current instruction's execution. Unlike $\text{INTR}$, the $\text{NMI}$ signal is **edge-triggered** (L-to-H) and **unaffected** by the $\text{IF}$ flag. |
-
-
-### Phase 2: CPU Internal State Save (Non-Bus Cycles)
-
-The CPU immediately prepares to service the Type 2 interrupt without any external negotiation. These steps are fast, internal register transfers and stack adjustments.
-
-| Action | Doer | Pins/Registers Involved | Significance |
-| :--- | :--- | :--- | :--- |
-| Clear Interrupt Flags | CPU | Internal $\text{IF}$ and $\text{TF}$ | The **Interrupt Flag ($\text{IF}$)** is automatically **cleared ($\text{IF}=0$)** to block subsequent maskable interrupts. The **Trap Flag ($\text{TF}$)** is also **cleared ($\text{TF}=0$)** to disable single-stepping. |
-| Push Flags | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current contents of the **Flags Register** onto the stack. |
-| Push CS | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current **Code Segment ($\text{CS}$)** register onto the stack. |
-| Push IP | CPU | $\text{SS}, \text{SP}$ (Stack Pointers) | The CPU performs a $\mathbf{16\text{-bit PUSH}}$ to save the current **Instruction Pointer ($\text{IP}$)** register onto the stack. |
-
-
-### Phase 3: Vector Fetch and Service Jump (Bus Cycles)
-
-The CPU knows the vector address is fixed at **$8\text{H}$**, so it performs two consecutive **Memory Read** bus cycles to fetch the new $\text{CS}$ and $\text{IP}$ from the Interrupt Vector Table (IVT).
-
-#### **Cycle 1: Fetch New IP (Offset)**
-
-| Action | Doer | Pin Signal | Purpose |
-| :--- | :--- | :--- | :--- |
-| Address Output | CPU | $\mathbf{\text{AD0-AD19}}$ | Outputs the physical address $\mathbf{\text{00008H}}$. |
-| Memory Command | CPU | $\text{M}/\overline{\text{IO}}$ | **HIGH** (Memory operation). |
-| Read Command | CPU | $\mathbf{\overline{\text{RD}}}$ | **LOW** (Asserted) for a Memory Read. |
-| Data Transfer | Memory | $\text{D0-D15}$ | Memory places the $\mathbf{16\text{-bit New } \text{IP}}$ on the data bus. |
-| Register Load | CPU | $\text{IP}$ | The fetched value is loaded into the **$\text{IP}$ register**. |
-
-#### **Cycle 2: Fetch New CS (Segment)**
-
-| Action | Doer | Pin Signal | Purpose |
-| :--- | :--- | :--- | :--- |
-| Address Output | CPU | $\mathbf{\text{AD0-AD19}}$ | Outputs the physical address $\mathbf{\text{0000AH}}$ ($00008\text{H} + 2$). |
-| Memory Command | CPU | $\text{M}/\overline{\text{IO}}$ | **HIGH** (Memory operation). |
-| Read Command | CPU | $\mathbf{\overline{\text{RD}}}$ | **LOW** (Asserted) for a Memory Read. |
-| Data Transfer | Memory | $\text{D0-D15}$ | Memory places the $\mathbf{16\text{-bit New } \text{CS}}$ on the data bus. |
-| Register Load | CPU | $\text{CS}$ | The fetched value is loaded into the **$\text{CS}$ register**. |
-
-
-### Phase 4: Execution and Return
-
-| Action | Doer | Pins/Registers Involved | Significance |
-| :--- | :--- | :--- | :--- |
-| Execute ISR | CPU | $\text{CS}, \text{IP}$ | Execution begins at the first instruction of the Non-Maskable Interrupt Service Routine. |
-| IRET Instruction | CPU (Software) | N/A | The ISR concludes with the $\mathbf{\text{IRET}}$ (Interrupt Return) instruction. |
-| Pop Flags, CS, IP | CPU | $\text{SS}, \text{SP}$ | The $\text{IRET}$ instruction automatically performs three **POP** operations, restoring the original **Flags**, $\mathbf{\text{CS}}$, and $\mathbf{\text{IP}}$ from the stack. |
-| Resume Execution | CPU | $\text{CS}, \text{IP}$ | Execution resumes at the exact instruction that was originally interrupted. |
+The $\text{NMI}$ flow is much simpler and faster because the key difference is that $\text{NMI}$ has a single fixed vector address location like 6502, rest of the flow are same as INTR. When NMI is active at the end of T4 cpu will jump to the NMI's vector address(2) in the IVT and the it will jump to the ISR specified there
