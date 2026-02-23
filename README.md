@@ -18,10 +18,21 @@ To fully engage with the assembly programs and architectural concepts, a basic, 
 
 ## Concepts
 
-### Part I: Firm ware and BIO
-[Info](./Firmware.md)
+### Part I: Basics
+- Electronics
+    * [Intro](./electronics/electronics.md)
+        This give enough ideas and concepts required for electronics
+    * [Timing](./electronics/timings.md)
+        This is the basic timings and delays explained
+    * [Timing analysis](./electronics/timing-diagram.md)
+        This will provide a basics on how the timing are calculated and choose
+- CPU
+    * [Execution](Execution.md)
+        This will give details on how CPU execute instruction and how the data and address are using the bus
+    * [Info](./Firmware.md)
+        This gives a details about firmwarem non firmware hardware
 
-### Part I: 8086 Real Mode Foundation (Bare Metal)
+### Part II: 8086 Real Mode Foundation (Bare Metal)
 
 [Basic](./Basic.md)
 
@@ -36,11 +47,25 @@ The 8086 phase focused on understanding basic hardware interactions, memory layo
 * Memory management
 * code segment, stack segment switching between process
 * Interrupt Vector Table and custom handler installation
+* PIC configs
 
 [Click for 8086 high level docs](./8086/README.md)
+
+### Part III: Linking
+
+This part give a brief about how multiple relocatable files get linked, how c files are used in with nasm
+[code](./code/README.md)
+
+### Part IV: 80386 Protected Mode Architecture
+
+This phase implements the 80386 Protected Mode, which introduces hardware features necessary for a stable, multitasking environment. The focus is on protection, privilege separation, and virtual memory.
+
+[Click for 80386 high level docs](./80386/README.md)
+
+### [Blogs](./blog/README.md)
 
 
 
 ## Acknowledgements
 
-The high-level concepts, architectural overviews, and foundational explanations throughout this documentation—especially within the "Key Concepts Covered" sections—were significantly developed and clarified through interactive conversations with Gemini (Flash 2.5). Specific details and code implementations were also verified against and supplemented by various external websites and technical books, ensuring accuracy.
+I reframed texts using Gemini
