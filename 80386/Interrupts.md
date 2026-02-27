@@ -28,6 +28,11 @@ IDT contains any of these Task gates, Interrupt gates and Trap gates
 ![IDT](./res/IDT_DES.png)
 
 **Why is it required? (What it solved)**
+The IDT is necessary because the CPU must have a predefined, secure method to stop the current execution and jump to a specific handler when an unpredictable event occurs.
+* Error Handling: If a "Divide by Zero" or "Page Fault" occurs, the CPU needs to know exactly which instruction to run next to address the error.
+* Hardware Interaction: When a keyboard key is pressed or a network packet arrives, the hardware sends a signal. The IDT tells the CPU which code should process that signal.
+* System Calls: User-level programs use software interrupts (like INT 0x80 in Linux) to request services from the operating system. The IDT provides the gateway to the kernel.
+
 1. Security : On an 8086, any program could jump into an interrupt handler or overwrite the IVT. In the 386+, a program can only trigger an interrupt if it has the right Privilege Level (DPL). It ensures that code running in a restricted mode (Ring 3) cannot execute sensitive instructions unless the IDT explicitly allows a path to the kernel (Ring 0).
 2. State Management: When an interrupt happens on an 8086, the CPU just pushes Flags, CS, and IP, It has single stack were user program and interrupt service handler will be working. On a 386+, the IDT works with the TSS to automatically switch to a secure "Kernel Stack," ensuring a user-mode crash doesn't break the interrupt handler.
 3. Flexibility: It allows for different types of entries (Task, Interrupt, and Trap gates), each behaving differently regarding hardware interrupts and task switching.
@@ -43,17 +48,29 @@ IDT contains any of these Task gates, Interrupt gates and Trap gates
     - This descriptor contains the Base Address and the Limit (size) of the code segment where the handler lives.
 
 3. The CPU performs two specific checks:
+    **If it is a hardware interrupt or CPU exception, the DPL check is ignored. Ring 0 switch must happens**
     - Gate Check: The CPL (the privilege of the code that was running) must be numerically less than or equal to the DPL of the IDT Gate. This prevents user-mode programs (Ring 3) from manually triggering sensitive hardware interrupts via the INT n instruction unless permitted.
-    - Target Check: The CPL must be numerically greater than or equal to the DPL of the Target Code Segment (found in the GDT/LDT). This ensures the interrupt is "elevating" privilege (e.g., moving from Ring 3 to Ring 0).
+    - Target Check: The CPL must be numerically greater than or equal to the DPL of the Target Code Segment (found in the GDT/LDT). 
+    - Stack Switch: If the transition moves from User Mode (Ring 3) to Kernel Mode (Ring 0), the CPU consults the TSS to find the Kernel Stack pointer and switches to it.
 
 4. The final linear address is calculated as: $$\text{Linear Address} = \text{Segment Base (from GDT/LDT)} + \text{Offset (from IDT)}$$
 
 **The Gate Descriptors**
 
-1. Interrupt Gate : This is used for hardware (like the system clock or keyboard).
-2. Trap Gate    : This is used for software exceptions
-3. Task Gate : Hardware Multitasking
+[Gate](./GDT.md#gates)
 
+1. Interrupt Gate : This is used for hardware (like the system clock or keyboard).
+2. Trap Gate      : This is used for software exceptions
+3. Task Gate      : Hardware Multitasking
+
+When a processor is running in Ring 3 (User Mode) and an event triggers an Interrupt Gate or a Trap Gate, a stack switch and a privilege level switch are always required.
+Therefore, the CPU performs an automatic stack switch:
+- The CPU consults the TSS (Task State Segment) to find the pre-defined ESP0 (the pointer for the Ring 0 stack).
+- The CPU switches the SS (Stack Segment) and ESP (Stack Pointer) registers to this new kernel-owned memory.
+
+When a User Program is running and an interrupt occurs, the CPU does not search the GDT for a new TSS. It uses the currently loaded TSS already sitting in the TR (Task Register). It have  SS0 and ESP0 fields CPU use this.
+
+Task gate is not necessarly switch to only ring 0, it can switch to ring 0 to ring 0, ring 3 to ring 3 , Ring 3 to Ring 0 but ring 0 to ring 3  is not allowed must use IRET or far return
 
 ## TSS
 [Refer](https://www.scs.stanford.edu/05au-cs240c/lab/i386/s07_01.htm)
@@ -76,108 +93,47 @@ Modern linux almost stopped using TSS, only for kernel stack switch it uses
 
 When a User (Ring 3) program triggers an Interrupt Gate to enter the Kernel (Ring 0), the CPU refuses to use the user's stack (it might be full or malicious). The CPU looks inside the TSS to find the ESP0 (the "Known Good" Kernel Stack pointer). Without a TSS, the CPU would have nowhere to store data when moving from a low privilege to a high privilege, causing a "Triple Fault" (instant reboot).
 
-## Gates
+## Task gate
+- Task Gates in the GDT or LDT are for software-initiated task switching
+- Task Gate in the IDT is specifically for exception-initiated task switching.
+- The GDT and LDT are tables used by instructions (CALL, JMP). The IDT is the table used by events.
 
-Gates are the "controlled entry points" that allow a program to pass from one level of privilege to another in a safe, synchronized way.
+**Why required in IDT?**
+- In a standard interrupt (using an Interrupt Gate), the CPU uses the current stack (if already in Ring 0) or switches to a new stack using the address in the TSS. Both methods require the CPU to push data onto a stack. **It is using current task's ring 0 stack**
 
-Technically, a Gate is a special type of Descriptor. While a standard descriptor describes a block of memory (like data or code), a Gate describes an entry point to a function or a task.
+- If the reason for the interrupt is that the stack itself is broken (a Stack Fault) or if the CPU is in a state where it cannot write to memory (a Double Fault), an Interrupt Gate will fail because the CPU cannot perform the initial "push" of the EFLAGS and Return Address. This results in a "Triple Fault," which causes the computer to instantly reboot.
 
-If a User Application in Ring 3 needs to talk to the Hard Drive (which is a Ring 0 task), it cannot simply jump into the Kernel's code. If it did, it might crash the system. Gates solve this by providing a specific, pre-defined "window" where the switch is allowed to happen.
+- When an IDT entry is a Task Gate, the CPU does not use the current stack at all, even if current user stack is problem, interrupt can work in dedicated stack
 
-**Why do they exist?**
-The 8086 had no "Rings." Every program was essentially a "Superuser." The 80386 introduced Ring 0 (The Kernel/OS) and Ring 3 (The User Applications).
-
-**How a Gate Works**
-When the 80386 encounters a CALL or INT instruction pointing to a Gate, it doesn't just jump. It performs a multi-step "Handshake":
-1. Privilege Check: The CPU compares the requester's privilege (CPL) against the Gate’s privilege (DPL). If you aren't "cleared" to use this gate, the CPU triggers a General Protection Fault.
-2. The Switch: If cleared, the CPU automatically switches the Stack. Since Ring 3 and Ring 0 shouldn't share a stack for security reasons, the Gate tells the CPU where the "secure stack" is located.
-3. The Jump: Finally, the CPU loads the new Code Segment (CS) and Instruction Pointer (EIP) from the Gate and begins execution.
-
-### Task gate
-A Task Gate is an entry in a descriptor table (the GDT, LDT, or IDT) that points directly to a TSS.
-
-On 8086, if wanted to switch tasks, had to manually save all registers to memory, swap stack pointers, and jump to the new code. A Task Gate tells the CPU: "When someone calls this gate, pause everything and perform a full hardware context switch to the task defined in this TSS."
-
-**Why is it required?**
-1. Automated Switching: It triggers the hardware to save the current CPU state and load a new one in a single instruction (CALL or JMP).
-2. Handling "Total Meltdowns": This is the most important use today. If the system has a "Double Fault" (a crash so bad the CPU can't even run the error handler), a Task Gate can point to a "Safe Task" with its own clean stack to try and recover the system.
-3. Isolation: It allows an interrupt (like a keyboard press) to trigger a specific, isolated task without interfering with whatever the user is currently doing.
-
-Modern linux stopped using TSS gate
-
-**How it Works?**
-When the CPU hits a Task Gate (via a CALL instruction or an Interrupt), the following happens automatically in hardware:
-1. The Pause: The CPU stops the current code.
-2. The Save: It takes all current registers ($EAX, EIP, ESP, etc.$) and writes them into the current TSS.
-3. The Load: It goes to the Task Gate, finds the new TSS, and sucks all those values into the CPU registers.
-4. The Link: It sets a "Busy" bit so the task can't re-enter itself, and optionally links the new task to the old one (the "Backlink").
-5. The Resume: The CPU starts executing at the new $EIP$.
-
-### Call gate
-
-A Call Gate is a specialized Descriptor in a system table (the GDT or LDT). Instead of a program calling a memory address directly, it calls the "Gate."
-
-Think of it as a controlled entry point. On the 8086, a program could walk through any door in the house. With a Call Gate, all the doors are locked, and the program must go through a specific hallway where its "ID" is checked before it can enter the room.
-
-in call gate CPU ignore the EIP given in instruction and take from descriptor table, to make sure call only enter in entry on the code not in middle 
-
-**Structure**
-* **call gate descriptor**
-- Selector - 16 bit (Points to the the executable code index in descriptor table)
-- Count    - 5 bit (No of parameter)
-- zero     - 3 bit (not used)
-- Type     - 5 bit (says call gate)
-- DPL      - 2 bit (determine what privilege levels can use the gate)
-- P        - 1 bit (is present in memory)
-- Offset   - 32 bit 
-
-![call gate descriptor](./res/callgate.png)
+- Faults like Double Fault, Stack Fault uses task gate in IDT
 
 
-**Why is it required?**
-1. Privilege Transition: **It allows a low-privilege application (Ring 3) to execute code in the high-privilege Kernel (Ring 0) without giving the application full control over the CPU**.
-2. Hiding the Address: The application doesn't need to know where the Kernel code is located in memory. It only needs to know the "Selector" for the Gate.
-3. Parameter Validation: The hardware can automatically copy parameters from the user’s stack to the kernel’s stack to prevent memory corruption.
-
-**How it Works?**
-In a system using Call Gates, the process changes:
-1. The program issues a CALL to a Selector (e.g., CALL 0x0040:0x0).
-2. The CPU sees that 0x40 points to a Call Gate, not a code segment.
-3. The CPU checks the CPL (Current Privilege Level). If the program is allowed to use this gate, the CPU proceeds.
-4. The CPU automatically switches to the Kernel Stack
-5. The CPU jumps to the actual address stored inside the Gate.
-
-Linux does not use call gates
-
-### Interrupts
+## Interrupts
 Both the Interrupt and Trap gates share the same 8-byte format, but their "Type" bits differ.
-It stored only in IDT
+- It must stored only in IDT, Because if a hardware interrupt or exeception occurs  CPU only look in interrupt table it is hardwired
+- If you try to place a Trap Gate descriptor in the LDT and then call it using an INT instruction, the CPU will trigger a General Protection Fault.
 
 Offset (0-15):	The lower 16 bits of the handler's address.
 Selector :	The 16-bit Code Segment.
 DPL :	Descriptor Privilege Level (Who can trigger this?).
 Offset (16-31):	The upper 16 bits of the handler's address.
 
+
 #### The Interrupt Gate
-The Interrupt Gate is designed primarily for Hardware Interrupts (like your Keyboard or System Clock).
-When a hardware device pulls the "Interrupt" pin on the CPU, the CPU looks up the Interrupt Gate. Its special "superpower" is that it automatically clears the IF (Interrupt Flag).
-
-While the interrupt can happen at any privilege level, the handler (the code that fixers the interrupt) almost always runs in Ring 0.
-
-When a hardware interrupt occurs, the CPU performs an automatic "Privilege Level Transition":
-1. The Interrupted State: The CPU might be running a web browser in Ring 3.
-2. The Trigger: A hardware signal arrives at the CPU's pins.
-3. The Lookup: The CPU consults the IDT
-4. The Promotion: The IDT entry points to a Code Segment in the GDT that is marked as DPL 0 (Kernel Mode).
-5. The Switch: The CPU automatically switches from Ring 3 to Ring 0 to execute the Interrupt Service Routine (ISR).
+- The Interrupt Gate is designed primarily for Hardware Interrupts (like your Keyboard or System Clock).
+- When a hardware device pulls the "Interrupt" pin on the CPU, the CPU looks up the Interrupt Gate and it automatically clears the IF (Interrupt Flag).
+- While the interrupt can happen at any privilege level, the handler (the code that fixers the interrupt known as Target Segment) almost always runs in Ring 0. 
+- Interrupt Gate can be a set to DPL ringe 3 but in a real operating system like Linux 0.12, no hardware interrupt gate is ever set to DPL 3 and it is not encourageable 
 
 **Hardware Interrupts Ignore the DPL of the Gate**
-- Software Interrupt: If a Ring 3 program tries to call a Ring 0 gate, the CPU checks the IDT Gate's DPL. If they don't match, it triggers a General Protection Fault.
+- Software Interrupt: If a Ring 3 program tries to call a Ring 0 interrupt gate, the CPU checks the IDT Gate's DPL. If they don't match, it triggers a General Protection Fault.
 - Hardware Interrupt: The CPU ignores the DPL of the IDT gate. Because hardware is "impartial," it is allowed to redirect the CPU to a Ring 0 handler regardless of what code was running at the time.
     If the CPU is in Ring 3 and a hardware interrupt moves it to Ring 0, the CPU cannot use the Ring 3 stack (it is untrusted and might overflow).
     - The CPU automatically looks into a special structure called the TSS (Task State Segment).
     - It finds the Ring 0 Stack Pointer (ESP0).
     - It switches to the Kernel Stack before saving the registers.
+
+
 
 #### Trap gate
 A Trap Gate is a descriptor that tells the CPU how to handle a "software-initiated" event, like an exception (division by zero) or a specific program request.
@@ -187,10 +143,7 @@ The biggest difference between a Trap Gate and an Interrupt Gate  is how they ha
 * Trap Gate: Leaves the Interrupt Flag alone. Other hardware interrupts can still fire while the trap handler is running. If a program crashes (Trap), the kernel needs to handle it, but the system clock and keyboard should keep running in the background.
 
 
-**How the CPU uses** 
-1. The Event: An event happens (Hardware fires or Code crashes).
-2. The Index: The CPU multiplies the interrupt number by 8 (because each gate is 8 bytes) to find the entry in the IDT.
-3. The Check: The CPU checks the DPL. If a User program tries to trigger a "Kernel Only" gate, the CPU generates a General Protection Fault.
-4. The Stack Switch: The CPU looks at the TSS to find the Kernel's Stack. It pushes the old CS, EIP, and EFLAGS onto the new stack.
-5. The IF Flip: If it's an Interrupt Gate, the CPU sets $IF = 0$. If it's a Trap Gate, it does nothing.
-6. The Jump: The CPU loads the Selector and Offset from the Gate and starts running the handler.
+
+It is same as call gate. only few difference
+
+[Complete flow](./interrupt_gate_flow.md)
