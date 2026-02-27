@@ -116,3 +116,96 @@ Even if two programs are both running at Ring 3 (the least privileged level), th
     * No Map, No Access: If Program A tries to guess Program B's address, the Page Table simply won't have a mapping for it, or it will be marked as "Not Present," triggering a Page Fault.
 
 Remember this is not applicable to ring 0, ring 0 can see any process any memory
+
+
+## Gates
+- Gates themselves are just "descriptors". It can be found in any GDT, LDT or IDT
+
+- Gates are the "controlled entry points" that allow a program to pass from one level of privilege to another in a safe, synchronized way.
+
+- Technically, a Gate is a special type of Descriptor. While a standard descriptor describes a block of memory (like data or code), a Gate describes an entry point to a function or a task. Gates hold a address to target code segment selector
+
+- Since Gate is descriptor in descriptor table it will have a DPL, gate's selector is a index to  descriptor table for target segment. Gate's DPL act as a entry guard, it check which ring can access, target segment's descriptor is user to elivate the role (ring 3 -> ring 0)
+
+- If a User Application in Ring 3 needs to talk to the Hard Drive (which is a Ring 0 task), it cannot simply jump into the Kernel's code. If it did, it might crash the system. Gates solve this by providing a specific, pre-defined "window" where the switch is allowed to happen.
+
+
+This rule is common for all gates
+- Gates can transfer the control from low to high
+- High to low is not possible from gates it should use only `far ret` or `IRET`
+1. If gate's DPL = 3 and Target Segment DPL = 0
+    - Meaning gate can be accessed from level 3 and target code segment can only access by privilege 0, so CPU automatically transfer the control to privilege 0, execute the code then return to privilege 3, during this time repective stack also changed
+2. If gate's DPL = 2 and Target Segment DPL = 0
+    - Same as rule 1, but minimum permission to access the gate it self is level 2, level 3 can't even access
+    - access gate from 0 or 1, will cause exeception
+3.  If gate's DPL = 3 and Target Segment DPL = 3
+    - No control transfer and stack switch
+    - If role 0 or 1 or 2 try to access gate CPU won't allow, because CPU won't allow control transfer from high to low, high to low only happen through `IRET` or `far ret`
+
+**Why do they exist?**
+The 8086 had no "Rings." Every program was essentially a "Superuser." The 80386 introduced Ring 0 (The Kernel/OS) and Ring 3 (The User Applications).
+
+**How a Gate Works in brief**
+
+*Check the call gate for detailed flow*
+
+When the 80386 encounters a CALL or INT instruction pointing to a Gate, it doesn't just jump. It performs a multi-step "Handshake":
+1. Privilege Check: The CPU compares the requester's privilege (CPL) against the Gate’s privilege (DPL). If you aren't "cleared" to use this gate, the CPU triggers a General Protection Fault.
+2. The Switch: If cleared, the CPU automatically switches the Stack. Since Ring 3 and Ring 0 shouldn't share a stack for security reasons, Based on the CPL's TSS it will switch the stack
+3. The Jump: Finally, the CPU loads the new Code Segment (CS) and Instruction Pointer (EIP) from the Gate and begins execution.
+
+
+### Call gate
+
+A Call Gate is a specialized Descriptor in a system table (the GDT or LDT). Instead of a program calling a memory address directly, it calls the "Gate."
+
+Think of it as a controlled entry point. On the 8086, a program could walk through any door in the house. With a Call Gate, all the doors are locked, and the program must go through a specific hallway where its "ID" is checked before it can enter the room.
+
+In call gate CPU ignore the EIP given in instruction and take from descriptor table, to make sure call only enter in entry on the code not in middle 
+
+**Structure**
+* **call gate descriptor**
+- Selector - 16 bit (Points to the the executable code index in descriptor table)
+- Count    - 5 bit (No of parameter)
+- zero     - 3 bit (not used)
+- Type     - 5 bit (says call gate)
+- DPL      - 2 bit (determine what privilege levels can use the gate)
+- P        - 1 bit (is present in memory)
+- Offset   - 32 bit 
+
+![call gate descriptor](./res/callgate.png)
+
+
+**Why is it required?**
+1. Privilege Transition: **It allows a low-privilege application (Ring 3) to execute code in the high-privilege Kernel (Ring 0) without giving the application full control over the CPU**.
+2. Hiding the Address: The application doesn't need to know where the Kernel code is located in memory. It only needs to know the "Selector" for the Gate.
+3. Parameter Validation: The hardware can automatically copy parameters from the user’s stack to the kernel’s stack to prevent memory corruption.
+
+**How it Works?**
+In a system using Call Gates, the process changes:
+1. The program issues a CALL to a Selector (e.g., CALL 0x0040:0x0).
+2. The CPU sees that 0x40 points to a Call Gate, not a code segment.
+3. The CPU checks the CPL (Current Privilege Level). If the program is allowed to use this gate, the CPU proceeds.
+4. The CPU automatically switches to the Kernel Stack
+5. The CPU jumps to the actual address stored inside the Gate.
+
+Linux does not use call gates
+
+[Call gate flow](./call_gate_complete_work.md)
+
+
+## Task gate
+A Task Gate is an entry in a descriptor table (the GDT, LDT, or IDT) that points directly to a TSS.
+
+This involves a full context swap using a TSS (Task State Segment).
+
+On 8086, if wanted to switch tasks, had to manually save all registers to memory, swap stack pointers, and jump to the new code. A Task Gate tells the CPU: "When someone calls this gate, pause everything and perform a full hardware context switch to the task defined in this TSS."
+
+**Why is it required?**
+1. Automated Switching: It triggers the hardware to save the current CPU state and load a new one in a single instruction (CALL or JMP).
+2. Handling "Total Meltdowns": This is the most important use today. If the system has a "Double Fault" (a crash so bad the CPU can't even run the error handler), a Task Gate can point to a "Safe Task" with its own clean stack to try and recover the system.
+3. Isolation: It allows an interrupt (like a keyboard press) to trigger a specific, isolated task without interfering with whatever the user is currently doing.
+
+Modern linux stopped using TSS gate
+
+[Task](./TaskSwitch.md)
