@@ -598,3 +598,6 @@ $ ./my_program
 $ echo $?
 35
 ```
+
+
+## [Inline asm](./inline.md)
