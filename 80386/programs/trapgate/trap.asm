@@ -1,9 +1,9 @@
 [bits 32]
 [org 0x0000]
 
-SCRN_SEL equ 0x18
-LDT0_SEL equ 0x28
-TSS0_SEL equ 0x20
+SCRN_SEL equ 0x18   ; 0001_1000 ==   Index = 0001_1(3) TL = 0 DPL = 00
+TSS0_SEL equ 0x20   ; 0010_0000 ==   Index = 0010_0(4) TL = 0 DPL = 00
+LDT0_SEL equ 0x28   ; 0010_1000 ==   Index = 0010_1(5) TL = 0 DPL = 00
 
 head_start:
     mov eax, 0x10   ; load data segment
@@ -23,7 +23,7 @@ head_start:
     lgdt [lgdt_opcode]    
 
     ; change segment as per new GDT
-    mov eax, 0x10
+    mov eax, 0x10           ; 0001_0000 Index = 0001_0(2) TL = 0 DPL = 00 ; 2nd index
     mov ds, ax
     mov es, ax
     mov fs, ax
@@ -46,7 +46,7 @@ head_start:
     lldt word ax
 
     ;------------------------------Setup 
-    push 0x17           ;   SS
+    push 0x17           ;   SS          ; 0001_0111 -> Index = 0001_0(2) T=1 DPL=11
     push init_stack     ;   ESP
     pushf               ;   EFLAGS
     push 0x0f           ;   CS
@@ -136,8 +136,9 @@ idt:
     ;   offset         P D  TYP   Not used  
     ;0000000000000000__1_11_01111_00000000
     ;  Ring0 code segment, This is to whom control transfer DPL
-    ;          S=8, T=0 D=00  offset
-    ;000000000_1000_0__00_____00000000_00000000
+    ;          S=1, T=0 D=00  offset
+    ;000000000_0001_0__00_____00000000_00000000
+    ; 1 (index) * 8 (length) = 8 (th offset in GDT), this CPU do automatically
     dq 0x0000_EF00_0008_0000
     ; offset of the function `system_interrupt` has to be upated dynamically or by reading ndisasm hardcode the value
     ; modifying in run time is more robust
@@ -170,6 +171,10 @@ tss0:
     dd 0, 0, 0, 0, 0        ; ebx esp, ebp, esi, edi
     dd 0, 0, 0, 0, 0, 0     ; es, cs, ss, ds, fs, gs
     dd LDT0_SEL, 0x8000000  ; ldt, trace bitmap 
+    ; 0x8000000 is split into the 16-bit T-bit (Trap bit) and the 16-bit I/O Map Base Address.
+    ; Low 16 bits (0x0000): The T-bit (Debug Trap Flag). If this bit is set to 1, the processor generates a debug exception whenever a task switch to this task occurs.
+    ; High 16 bits (0x0800): The I/O Map Base Address. This is the offset from the start of the TSS to the I/O Permission Bit Map.
+    ; The value 0x0800 (which is 2048 in decimal) is a very common "dummy" or "null" value, Points way past the end of the TSS; effectively disables I/O port access for this task.
 
 nop
 
