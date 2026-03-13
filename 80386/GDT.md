@@ -32,6 +32,7 @@ Instead of pointing directly to a memory location, the segment registers in the 
 
 
 ## Global Descriptor Table (GDT)
+![segment_descriptor_struct](./res/segment_descriptor_struct.png)
 
 Each entry, or descriptor in GDT contains critical information:
 
