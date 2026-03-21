@@ -9,9 +9,7 @@ Segment registers are 16bit, New segment registers were introduced `FS & GS (Add
 
 ### Control Registers
 These are 32-bit registers used to define the operating mode of the CPU and manage paging.
-- CR0
-    * PE (Bit 0): Protection Enable. Set this to 1 to switch from Real Mode to Protected Mode.
-    * PG (Bit 31): Paging. Set this to 1 to enable Virtual Memory.
+- CR0: System control
 - CR1: Reserved for future processors (not used in the 386).
 - CR2: Page Fault Linear Address. If the CPU hits a memory error (Page Fault), it stores the address that caused the error here.
 - CR3: Page Directory Base Register (PDBR). This holds the physical address of the very first table used in Paging.
@@ -35,7 +33,7 @@ The Three big table registers
 ### Invisible Registers
 Each segment register actually consists of two parts:
 1. The Visible Part (Selector): The 16-bit register you can see and modify (e.g., MOV AX, DS).
-2. The Invisible Part (Descriptor Cache): A "hidden" 64-bit (approx.) register that the CPU uses to store information about the segment.
+2. The Invisible Part (Descriptor Cache): A hidden register that the CPU uses to store information about the segment.
 
 In the 8086, the CPU just did a simple bit-shift: $Segment \times 16 + Offset$. 
 
