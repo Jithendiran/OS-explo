@@ -1,3 +1,21 @@
+## Interrupt Request (IRQ) Lines
+
+An Interrupt Request (IRQ) is a physical or virtual (software) signal sent to a computer processor (CPU) to temporarily stop current program execution. The purpose of an IRQ is to alert the CPU that a hardware device requires immediate attention, such as reading incoming data from a network card or registering a keypress.
+```
++------------------+         IRQ Signal Line        +------------------+
+| Hardware Device  | -----------------------------> |   CPU / Interrupt|
+| (e.g., Ethernet) | <----------------------------- |    Controller    |
++------------------+          Acknowledge           +------------------+
+```
+Without interrupts, the CPU must continuously ask every connected hardware device if it has work to perform (a inefficient process known as polling). Interrupts eliminate polling overhead by letting hardware devices notify the CPU only when action is required.
+
+## The Interrupt Controller
+Hardware devices do not connect directly to CPU execution cores. Instead, they connect through an intermediary hardware chip called an Interrupt Controller (such as an IO-APIC or legacy 8259 PIC).
+The Interrupt Controller performs three primary functions:
+* Collects interrupt signals from multiple external devices.
+* Prioritizes competing interrupts.
+* Forwards the interrupt signal to the specific CPU core alongside a IRQ vector number ID.
+
 ## The IDT: The CPU's Interrupt Jump Table
 
 ### Why It Exists
