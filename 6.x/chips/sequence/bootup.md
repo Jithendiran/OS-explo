@@ -103,8 +103,8 @@ At power-on, the UART hardware powers up in an unconfigured, default state. The 
   * Register Offset/Address: Base Address + 4
   * Value to Write: 0x03 (Hexadecimal) or 00000011 (Binary)
   * Bit Details:
-    * Bit 0 = 1 (Asserts DTR - Data Terminal Ready).
-    * Bit 1 = 1 (Asserts RTS - Request to Send, indicating readiness to receive data).
+    * Bit 0 = 1 (Asserts DTR - Data Terminal Ready). Signals to the remote device that the local system is initialized and present.
+    * Bit 1 = 1 (Asserts RTS - Request to Send, indicating readiness to receive data). Signals to the remote device that the local system's receive buffer is empty and ready to accept data.
     * Bit 3 = 1 (Enables OUT2, a required master interrupt gate on standard PC-compatible UART architectures). If left 0 UART's internal circuitry will block all hardware interrupts from reaching the system's interrupt controller (like the PIC or APIC), cpu will never receive serial interrupts (such as data-ready or transmitter-empty alerts).
 
 ### Step 8: Re-enable Desired Interrupts (IER)
