@@ -13,9 +13,38 @@ Universal Asynchronous Receiver-Transmitter (UART) is a hardware peripheral used
   * Data Bits: The 5 to 8 bits of actual data are sent.
   * Parity Bit (Optional): A primitive error-checking bit.
   * Stop Bit: The wire is driven back to a high voltage state (Logical 1) for one or two bit-periods to signal the end of the frame and reset the line for the next start bit.
+  
+### Functionality of UART
+* Baud Rate Configuration:
+  * Requires setting the internal communication speed so both sender and receiver agree on how fast individual bits travel.
+* Interrupt Enable and Disable Control:
+  * Allows software to turn individual hardware notification signals on or off depending on the needs of the operating system.
+* Interrupt Events:
+  * Data Arrival: Notifies the system when new incoming bytes are sitting in the receive buffer ready to be read.
+  * Transmission Completed: Notifies the system when the transmitter holding register or FIFO is empty and ready to accept the next outgoing byte.
+  * Hardware Errors:
+    * Overrun Error: Occurs when new data arrives faster than the system can read the old data, resulting in a lost byte.
+    * Parity Error: Occurs when the calculated parity bit does not match the data received, indicating corruption in transit.
+    * Framing Error: Occurs when the expected stop bit is missing, which typically happens when the sender and receiver are configured to different baud rates.
+    * Break Interrupt: Occurs when the transmission line is held continuously in a low voltage state for longer than the transmission time of a single frame.
+  * Character Timeout (FIFO): 
+    * Behavior: When the receiver FIFO reaches the pre-configured trigger level (set by bits 5–4 of the FCR), the UART asserts a Received Data Available interrupt.
+    * Character Timeout Exception: If bytes accumulate in the receive FIFO below the trigger threshold, but no new data arrives for a duration equivalent to the time it takes to transmit four character frames, the UART triggers a Character Timeout Interrupt. This ensures that lingering bytes are processed by the CPU without waiting indefinitely for the buffer to fill.
+* Selective CPU Interruption:
+  * Restricts hardware interrupt signals only to specifically permitted events, preventing the processor from being overwhelmed by unneeded alerts.
+* External Device Flow Control:
+  * Manages hardware handshake lines to coordinate communication pacing between the local system (computer) and connected external equipment (Printer, mice,..), preventing buffer overflows.
 
 ## 2. The 8250 UART Chip Architecture
 The 8250 UART is a specific, historic silicon chip designed in late 1970s. It became the foundational standard for serial ports in IBM-compatible personal computers. Modern serial hardware still emulates the architecture of the 8250 family.
+
+```
++---------+                              +----------+
+|         |  serial +--------+  parallel |          |
+| Printer,| <-----> |  UART  | <=======> | Computer |
+| mice,.. |         +--------+           |   (CPU)  |
++---------+                              +----------+
+```
 
 ### Why the 8250 Architecture Matters
 Before the 8250, developers had to write unique code for every proprietary serial hardware layout. The 8250 standardized a specific set of internal Hardware Registers (memory locations inside the chip) that the CPU uses to control serial communication.
@@ -30,6 +59,43 @@ Key registers established by this architecture include:
 The original 8250 had a severe hardware flaw: it could only hold one byte of received data at a time. If the CPU did not read that byte before the next serial byte arriving, the original byte was permanently overwritten (Overrun Error).
 
 To solve this, the 16550 UART was designed. It maintains exact backward compatibility with the 8250 register layout but adds a FIFO (First-In, First-Out) Buffer. The 16550 can hold up to 16 bytes of incoming data in hardware memory, giving the CPU more time to respond.
+
+## Flow Control 
+
+### Problem
+Two connected devices rarely process data at identical speeds. A fast transmitting device can easily overwhelm a slower receiving device, filling up its internal buffer and causing incoming data bytes to be permanently lost.
+
+### The Purpose of Flow Control:
+Flow control is a hardware or software mechanism that allows the receiving device to temporarily pause the transmitting device when the receiver's buffer is getting full, and resume transmission once it has caught up.
+
+### Hardware Flow Control (RTS/CTS Handshaking):
+The 8250/16550 architecture uses dedicated physical wires and control registers to manage communication pacing without consuming data bandwidth.
+* Request-to-Send (RTS):
+  * An output signal controlled by the local system via the Modem Control Register (MCR).
+  * The local system sets this line to tell the external device that the local system is ready to receive data. If the local buffer fills up, the software drops the RTS signal to tell the external device to stop sending.
+* Clear-to-Send (CTS):
+  * An input signal monitored by the local system via the Modem Status Register (MSR).
+  * The external device uses this line to tell the local system whether it is safe to transmit data. If the external device drops the CTS line, the local system pauses its own transmission until the line goes high again.
+
+## Baud Rate calculation
+$$\text{Baud Rate} = \frac{\text{Input Clock Frequency}}{16 \times \text{Divisor}}$$
+* Input Clock Frequency: The baseline frequency of the crystal oscillator connected to the UART chip (commonly $1.8432\text{ MHz}$ in classic systems, or other standard frequencies depending on the hardware architecture).
+* $16$: The standard oversampling factor used by UART receivers to safely sample incoming bits near their center.
+* Divisor: The combined 16-bit value formed by concatenating the Divisor Latch High (DLM) and Divisor Latch Low (DLL) registers.  
+
+### Example Calculation
+If your UART has an input clock of $1.8432\text{ MHz}$ ($1,843,200\text{ Hz}$) and you want a target baud rate of $115,200$:
+
+$$\text{Divisor} = \frac{1,843,200}{16 \times 115,200} = \frac{1,843,200}{1,843,200} = 1$$
+You would split the 16-bit integer 1 into the two registers:
+* Divisor Latch Low (DLL at offset +0, DLAB=1): `0x01`
+* Divisor Latch High (DLM at offset +1, DLAB=1): `0x00`
+
+The local computer's software configuration, the local UART hardware divisor, and the external connected device must all be configured to the exact same baud rate (such as 115,200).
+
+## [Registers](./UART-Registers.md)
+
+## [Sequence](./sequence/README.md)
 
 ## 3. Multi-Port Serial Controllers and Interrupt Sharing
 A standard computer architecture allocates specific resource channels to communicate with hardware components. One key channel is the Interrupt Request (IRQ) Line, a physical wire that a device uses to scream for the CPU's immediate attention.
@@ -103,32 +169,40 @@ Even though physical paper teletypewriters are obsolete, the design concept rema
 * The UART Hardware: The electronic engine moving bits over a wire.
 * The TTY Abstraction: The functional agreement that the data passing through that UART consists of a text-based command stream used to interact with a system.
 
-## 5. Memory-Mapped I/O (MMIO) vs. Port-Mapped I/O (PMIO)
+## 5. Line Disciplines and Device Identification Architecture
+### The Function of Line Disciplines
+A line discipline is an intermediate software layer inside the operating system kernel. It sits directly between the low-level UART hardware driver and the high-level user applications.
+* The Reason for Existence: Raw hardware UART drivers only move individual bytes of data back and forth across a physical copper wire. They do not know whether those bytes represent letters typed on a keyboard, packets of internet data, or coordinates from a pointing device. The line discipline interprets the raw byte stream and applies specific processing rules.
+* Dynamic Inter-changeability: Multiple software modules exist within the kernel to handle different data formats. The operating system can swap these software modules dynamically on the same physical UART port depending on what type of external equipment is attached.
+
+### Available Line Discipline Types
+The operating system kernel includes several standard line discipline modules, each designed for a specific class of data transmission:
+* n_tty (Standard Terminal Discipline):
+       Function: Processes the byte stream as interactive text. It manages input buffering, line editing (such as processing the backspace key), character echoing back to a display, and special control character interpretation (such as translating specific key combinations into system process signals).
+* n_ppp (Point-to-Point Protocol Discipline):
+       Function: Packages raw serial bytes directly into network packets. It allows standard internet protocol traffic (such as TCP/IP) to travel across a serial communication link.
+* n_mouse (Legacy Mouse Discipline):
+       Function: Intercepts historical serial data streams sent by older external pointing devices and translates those raw bytes into standard graphical mouse movement and click events.
+### Method of Identifying Attached External Devices
+Raw UART hardware ports lack any plug-and-play electronic signaling protocol. An operating system cannot automatically detect whether a terminal, a modem, a network bridge, or a mouse is attached to the physical pins.
+
+Device identification and line discipline selection occur through external configuration rather than automatic hardware discovery:
+1. Manual System Configuration:
+       * System administrators or initialization scripts explicitly inform the operating system kernel regarding what equipment is wired to a specific serial port.
+2. User-Space Attachment Utilities:
+       * System software uses specific control utilities (such as the `ldattach` program) to open a serial device file (such as `/dev/ttyS0`) - `ldattach slip /dev/ttyS0` and issue a kernel control command (`ioctl`).
+       * This command forces the kernel to detach the default text terminal module (`n_tty`) and attach the required alternative module (such as `n_ppp` or `n_slip`).
+3. Automated Daemons:
+       * Background networking or communication services automate this process during system startup or connection requests, configuring the correct line discipline without requiring manual intervention for established configurations.
+
+## 6. Memory-Mapped I/O (MMIO) vs. Port-Mapped I/O (PMIO)
 
 The CPU interacts with the UART hardware via specific control registers. The operating system accesses these registers using one of two architectures depending on the processor type:
 
 * Port-Mapped I/O (PMIO): Common in x86 architectures. Registers are accessed using specialized CPU instructions (such as `in` and `out`) through a separate I/O address space.
 * Memory-Mapped I/O (MMIO): Common in ARM and modern x86 systems. The hardware registers are mapped directly into the physical memory address space of the system. The CPU accesses the UART registers using standard memory access instructions (such as pointers in C).
 
-### Essential Hardware Registers
-A standard 8250/16550 UART controller exposes a set of 1-byte registers. The primary registers required for operations are:
-
-|Register Name|Abbreviation|Access Type|Purpose|
-|-------------|------------|-----------|-------|
-|Receive Buffer Register|`UART_RX`|Read-Only|Holds the incoming byte of data extracted from the serial line.|
-|Transmit Holding Register|`UART_TX`|Write-Only|Accepts the byte of data that the CPU wants to transmit over the serial line.|
-|Interrupt Enable Register|`UART_IER`|Read/Write|Enables or disables specific hardware interrupts (e.g., Data Ready, Transmit Register Empty).|
-|Fifo Control Register|`UART_FCR`|Write-Only|Configures the 16-byte internal FIFO buffers and sets the interrupt trigger thresholds.|
-|Line Status Register|`UART_LSR`|Read-Only|Provides the status of the data transfer, indicating if data is ready to be read (`UART_LSR_DR`) or if the transmit register is empty (`UART_LSR_THRE`).|
-|Line Control Register|`UART_LCR`|Read/Write|"Configures data framing (word length, parity, stop bits) and hosts the DLAB switch (Bit 7) used to swap register mappings."|
-|Divisor Latch Low (LSB)|`UART_DLL`|Read/Write|Accessible only when DLAB = 1. Holds the lower 8 bits of the 16-bit divisor value used to calculate the baud rate.|
-|Divisor Latch High (MSB)|`UART_DLH`|Read/Write|Accessible only when DLAB = 1. Holds the upper 8 bits of the 16-bit divisor value used to calculate the baud rate.|
-|Interrupt Identification Register|`UART_IIR`|Read-Only|Shares an address with UART_FCR. Allows the CPU to read and identify the highest priority pending interrupt when multiple interrupt sources are enabled.|
-|Modem Control Register|`UART_MCR`|Read/Write|"Controls external modem interface signals like Data Terminal Ready (DTR) and Request to Send (RTS), and enables the internal diagnostic loopback mode."|
-|Modem Status Register|`UART_MSR`|Read-Only|"Provides the real-time status and change-state indicators of the incoming modem control lines, such as Clear to Send (CTS) and Data Set Ready (DSR)."|
-|Scratch Register|`UART_SCR`|Read/Write|A temporary 1-byte storage register that has no effect on the UART hardware. It is used purely by the programmer to test if the UART is present and responsive.|
-
-## 6. Boot Configuration and Driver Initialization
+## 7. Boot Configuration and Driver Initialization
 Before the operating system can read or write to the UART, the kernel must locate the hardware, map its registers, configure the internal baud rate generators, and register the device with the subsystem.
 ```
 [Firmware / Device Tree] 
@@ -162,54 +236,3 @@ The kernel matches the detected hardware with the corresponding driver (`drivers
 
 ### Step D: TTY Core Registration
 The 8250 driver registers the serial port with the Linux TTY (Teletype) core subsystem using `uart_add_one_port()`. This framework exposes the hardware to user space as a character device node, typically located at /dev/ttyS0.
-
-## 7. Runtime Runtime Operation: Data Reception (Read Path)
-When data arrives from an external source, it moves from the physical wire to user space application memory via Programmed I/O.
-
-```
-[Serial RX Wire]
-       │
-       ▼
-[16-Byte Hardware FIFO] ── (Reaches Threshold / Timeout)
-       │
-       ▼
-[Interrupt Controller] ─── (Fires Hardware IRQ)
-       │
-       ▼
-[CPU: serial8250_interrupt()]
-       │
-       ├─► Read UART_RX Register ──► Copy to System RAM (TTY Flip Buffer)
-       └─► Check UART_LSR ─────────► Repeat if Data Ready (UART_LSR_DR)
-```
-1. Deserialization: The physical wire transitions electrical voltages representing high (1) and low (0) states. The UART receiver detects the start bit, samples the incoming stream according to the configured baud rate, assembles the bits into a single 8-bit byte, and pushes that byte into the internal 16-byte hardware FIFO.
-2. Interrupt Trigger: The hardware FIFO continues to fill. Once the number of bytes hits the pre-configured threshold (or if bytes sit in the FIFO for longer than a specific time period without new data arriving, known as a character timeout), the UART hardware asserts its physical interrupt pin.
-3. Kernel Routing: The Local Advanced Programmable Interrupt Controller (LAPIC) detects the interrupt signal on the bus and halts the current CPU execution thread. The kernel references its Interrupt Descriptor Table (IDT), executes `handle_edge_irq()`, and calls the registered handler for the serial line: `serial8250_interrupt()`.
-4. The PIO Extraction Loop: The CPU executes the low-level processing function `serial8250_rx_chars()`. The CPU reads the `UART_RX` register using an I/O read operation (`serial_in`). This read operation physically pulls the oldest byte out of the hardware FIFO, clearing room in the hardware chip.
-5. Software Buffering: The CPU copies this byte into system RAM, specifically into the TTY subsystem's temporary storage known as the TTY Flip Buffer, using the function `tty_insert_flip_char()`.
-6. Loop Evaluation: The CPU reads the Line Status Register (UART_LSR). If the bitmask UART_LSR_DR (Data Ready) evaluates to true, it means more data remains in the hardware FIFO. The CPU loops back to Step 4. The CPU stays inside this loop until the hardware FIFO is completely empty, ensuring low hardware overhead.
-7. Push to User Space: Once the interrupt handler finishes, the TTY framework schedules a deferred task (a workqueue or tasklet) called `tty_flip_buffer_push()`. This copies the accumulated data out of the raw TTY flip buffers into the line discipline buffer, where it becomes available for user applications calling the read() system call on `/dev/ttyS0`.
-
-## 8. Runtime Runtime Operation: Data Transmission (Write Path)
-When an application transmits data, the process moves in reverse, transforming memory-stored structures back into timed electrical pulses.
-```
-[User Application] ────► Calls write() System Call
-       │
-       ▼
-[TTY Line Discipline] ──► Copies Data to TTY Write Buffer (System RAM)
-       │
-       ▼
-[8250 Serial Driver] ───► Checks UART_LSR for Empty Transmit Register
-       │
-       ▼
-[CPU: PIO Copy Loop] ───► Writes Byte to UART_TX Register
-       │
-       ▼
-[16-Byte Hardware FIFO] ──► Serializes Data onto TX Wire
-```
-1. System Call Initialization: A user space application calls the `write()` system call, passing a memory buffer containing the string to be sent (e.g., `"OK\n"`) to the file descriptor corresponding to `/dev/ttyS0`.
-2. Subsystem Buffering: The kernel transitions to kernel space. The TTY layer routes the characters through the configured line discipline, which processes special characters if required, and places the data into the TTY transmission buffer located in system RAM.
-3. Driver Notification: The TTY core calls the driver's start transmission function (`serial8250_start_tx()`).
-4. Status Verification: The CPU reads the Line Status Register (`UART_LSR`) of the UART chip to check if the Transmit Holding Register Empty (`UART_LSR_THRE`) bit is set. If this bit is `1`, the hardware is capable of accepting new data.
-5. Programmed I/O Write: The CPU pulls the first character out of the system RAM write buffer and writes it directly to the mapped virtual address of the `UART_TX` register using the `serial_out()` function.
-6. Hardware Serialization: The UART hardware takes the byte from `UART_TX`, places it into its transmission shift register, shifts out the start bit, followed by the data bits sequentially, and appends the stop bit onto the physical TX wire.
-7. The Transmit Interrupt Loop: As soon as the UART hardware clears the `UART_TX` register by shifting the byte out, it generates a transmission hardware interrupt. The CPU services this interrupt by re-entering the driver, identifying that the source of the interrupt was an empty transmit register, loading the next byte from system RAM into `UART_TX`, and repeating this cycle until the entire software buffer is drained.
